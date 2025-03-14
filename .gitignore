@@ -1,0 +1,20 @@
+# Ignore virtual environment
+venv/
+venv/*
+
+# Python bytecode
+*.py[cod]
+__pycache__/
+
+# Django stuff
+*.log
+*.pot
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+db.sqlite3
+
+
+# Environment variables
+.env

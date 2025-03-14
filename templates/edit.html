@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="title" content="Django chatapp" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Django chatapp" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+    <meta property="og:image" content="https://filesstatic.netlify.app/Chatapp/img/share.jpeg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="Django chatapp" />
+    <meta property="twitter:image" content="https://filesstatic.netlify.app/Chatapp/img/share.jpeg" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://filesstatic.netlify.app/chatapp/favicon_io/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://filesstatic.netlify.app/chatapp/favicon_io/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://filesstatic.netlify.app/chatapp/favicon_io/favicon-16x16.png" />
+    <link rel="manifest" href="https://filesstatic.netlify.app/chatapp/favicon_io/manifest.json" />
+    <title>Edit</title>
+    <style>
+      * {
+        margin: 0%;
+        padding: 0%;
+        box-sizing: border-box;
+      }
+      body {
+        background-color: #131518;
+        font-family: century gothic;
+      }
+      
+      .container {
+        max-width: 500px;
+        margin: auto;
+        position: relative;
+        top: 30px;
+        height: 90vh;
+        background-color: #282a2d;
+        border: 2px solid rgb(255, 132, 0);
+        text-align: center;
+        border-radius: 8px;
+        box-shadow: 4px 4px 10px -4px #9339f5;
+      }
+      @media screen and (max-width: 550px) {
+        .container {
+          top: 0px;
+          max-width: 550px;
+          height: 100vh;
+        }
+      }
+      
+      #title {
+        color: #fff;
+        font-size: 48px;
+        margin-top: 40px;
+      }
+      
+      form {
+        width: 80%;
+        margin: 0px auto;
+      }
+      
+      #login-fields {
+        width: 100%;
+      }
+      
+      #login-fields input {
+        margin-bottom: 20px;
+        padding: 12px 0px;
+        width: 100%;
+        text-align: center;
+        color: #fff;
+        font-size: 20px;
+        background: #131518;
+        border-radius: 8px;
+        outline: none;
+        border: none;
+      }
+      ::placeholder {
+        color: #7a7a7a;
+        opacity: 1;
+      }
+      
+      #password-relative {
+        margin-bottom: 20px;
+        text-align: left;
+      }
+      
+      #password-relative a {
+        transition-duration: 0.2s;
+        color: #9339f5;
+        text-decoration: none;
+        font-size: 20px;
+        font-weight: 400;
+        outline: none;
+      }
+      
+      #password-relative a:hover,
+      #password-relative a:focus {
+        transition-duration: 0.2s;
+        color: #a57df5;
+      }
+      
+      button {
+        margin-bottom: 6px;
+        width: 60%;
+        color: #fff;
+        font-size: 20px;
+        background: #9339f5;
+        border: none;
+        border-radius: 8px;
+        outline: none;
+        cursor: pointer;
+        padding: 16px 0px;
+      }
+      
+      button:hover {
+        transition-duration: 0.2s;
+        background: #6421eb;
+      }
+      
+      .smessage {
+        width: 80%;
+        margin: 0px auto;
+        color: #39f542;
+        font-size: 18px;
+      }
+      
+      .smessage:hover {
+        transition-duration: 0.2s;
+        color: #7df587;
+      }
+      .emessage {
+        width: 80%;
+        margin: 0px auto;
+        color: #f53939;
+        font-size: 18px;
+      }
+      
+      .emessage:hover {
+        transition-duration: 0.2s;
+        color: #f57d7d;
+      }
+      label {
+        display: block;
+        text-align: left;
+        color: #fff;
+        margin-bottom: 8px;
+      }
+      @media screen and (max-width: 550px) {
+        form {
+          width: 90%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <br />
+      <br />
+      <br />
+      <div id="login-header">
+        <div id="title">Edit</div>
+      </div>
+      <br />
+      <br />
+      <br />
+      <form method="post" onsubmit="return validateUsername()">
+        {% csrf_token %}
+        <div id="login-fields">
+          <label for="username">Username</label>
+          <input type="text" name="username" id="username" class="form-control" value="{{ initial_data.username }}" required autocapitalize="none" />
+          <label for="username">Email</label>
+          <input type="email" name="email" id="email" class="form-control" value="{{ initial_data.email }}" required />
+        </div>
+        <div id="password-relative">
+          <div>
+            <a href="{% url 'home' %}">Home</a>
+          </div>
+        </div>
+        <button id="submit-button" type="submit">Update Profile</button>
+      </form>
+      <br />
+      <br />
+
+      {% if success_message %}
+        <p class="smessage">{{ success_message }}</p>
+      {% endif %}
+      {% if error_message %}
+        <p class="emessage">{{ error_message }}</p>
+      {% endif %}
+    </div>
+    <script>
+      function validateUsername() {
+        var usernameInput = document.getElementById('username')
+        console.log(usernameInput)
+        var usernameValue = usernameInput.value
+      
+        // Check if the username contains spaces
+        if (/\s/.test(usernameValue)) {
+          alert('Username cannot contain spaces.')
+          usernameInput.value = usernameValue.replace(/\s/g, '')
+          return false
+        }
+      
+        return true // Allow form submission if there are no spaces
+      }
+    </script>
+  </body>
+</html>

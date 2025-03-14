@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="title" content="Django chatapp" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Django chatapp" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+    <meta property="og:image" content="https://filesstatic.netlify.app/Chatapp/img/share.jpeg" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="Django chatapp" />
+    <meta property="twitter:image" content="https://filesstatic.netlify.app/Chatapp/img/share.jpeg" />
+    <meta name="description" content=" Django Chat Connect is a web application powered by Django, using AJAX JavaScript for real-time messaging. It enables user-friendly 
+chat, friend management, and social interaction." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="apple-touch-icon" sizes="180x180" href="https://filesstatic.netlify.app/chatapp/favicon_io/apple-touch-icon.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="https://filesstatic.netlify.app/chatapp/favicon_io/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="https://filesstatic.netlify.app/chatapp/favicon_io/favicon-16x16.png" />
+    <link rel="manifest" href="https://filesstatic.netlify.app/chatapp/favicon_io/manifest.json" />
+    <title>User</title>
+    <style>
+      * {
+        margin: 0%;
+        padding: 0%;
+        box-sizing: border-box;
+        font-family: 'Inter', sans-serif;
+      }
+      
+      :root {
+        font-size: 62.5%;
+      }
+      
+      body {
+        background-color: #131518;
+        font-family: sans-serif;
+        color: aliceblue;
+      }
+      
+      .container {
+        max-width: 500px;
+        margin: auto;
+        position: relative;
+        top: 30px;
+        height: 90vh;
+        background-color: #282a2d;
+        border: 2px solid rgb(255, 132, 0);
+        text-align: center;
+        border-radius: 8px;
+        box-shadow: 4px 4px 10px -4px #9339f5;
+        overflow-y: hidden;
+      }
+      
+      @media screen and (max-width: 550px) {
+        .container {
+          top: 0px;
+          max-width: 550px;
+          height: 100vh;
+        }
+      }
+      
+      a {
+        display: inline-block;
+        padding: 1.3rem 2rem;
+        border-radius: 5px;
+        border: 2px solid #131518;
+        text-decoration: none;
+        color: aliceblue;
+        cursor: pointer;
+      }
+      .sbtn {
+        padding: 1.3rem 2rem;
+        color: #fff;
+        background: #9339f5;
+        border: none;
+        border-radius: 5px;
+        outline: none;
+        cursor: pointer;
+        font-size: 1.6rem;
+      }
+      .sbtn:hover {
+        transition-duration: 0.2s;
+        background: #6421eb;
+      }
+      .cbtn{
+        padding: 0%;
+      }
+      .row {
+        display: flex;
+        justify-content: center;
+      }
+      
+      .is_friend .dbtn {
+        margin-right: 1em;
+      }
+      .is_friend .cbtn {
+        margin-left: 1em;
+      }
+      .message {
+        width: 80%;
+        margin: 140px auto;
+        color: #f53939;
+        font-size: 2rem;
+      }
+      
+      .message:hover {
+        transition-duration: 0.2s;
+        color: #f57d7d;
+      }
+      
+      .info {
+        font-size: 2rem;
+        margin: 10rem 0rem 5rem 0rem;
+        line-height: 4rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      {% if messages %}
+        <div class="message">
+          {% for message in messages %}
+            {{ message }}
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="info">
+          <p class="username">Username: {{ user_details.username }}</p>
+          <p class="email">Email: {{ user_details.email }}</p>
+        </div>
+      {% endif %}
+      {% if user_details.send_request %}
+        <div class="send_request">
+          <form method="post" action="{% url 'add_friend' %}">
+            {% csrf_token %}
+            <input hidden type="text" name="username" value="{{ user_details.username }}" />
+            <button class="sbtn" type="submit">Send Request</button>
+          </form>
+        </div>
+      {% elif user_details.not_accepted %}
+        <div class="delete_request">
+          <form method="post" action="{% url 'delete_friend' %}">
+            {% csrf_token %}
+            <input hidden type="text" name="username" value="{{ user_details.username }}" />
+            <button class="sbtn" type="submit">Delete Your Request</button>
+          </form>
+        </div>
+      {% elif user_details.me_not_accepted %}
+        <div class="accept_request">
+          <form method="post" action="{% url 'accept_request' %}">
+            {% csrf_token %}
+            <input hidden type="text" name="username" value="{{ user_details.username }}" />
+            <button class="sbtn" type="submit">Accept Request</button>
+          </form>
+        </div>
+      {% else %}
+        {% if user_details.is_friend %}
+          <div class="row is_friend">
+            <form method="post" action="{% url 'delete_friend' %}">
+              {% csrf_token %}
+              <input hidden type="text" name="username" value="{{ user_details.username }}" />
+              <button class="sbtn dbtn" type="submit">Remove Friend</button>
+            </form>
+            <button class="sbtn cbtn">
+              <a href="../../chat/{{ user_details.username }}" class="btn btn-primary">Chat</a>
+            </button>
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    <script>
+      if (window.history.replaceState) {
+        window.history.replaceState(null, null, window.location.href)
+      }
+    </script>
+  </body>
+</html>
