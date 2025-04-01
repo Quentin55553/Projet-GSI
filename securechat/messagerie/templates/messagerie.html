@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+
+<div class="layout">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h2>SecureChat</h2>
+
+    <ul id="conversation-list">
+      {% for user in utilisateurs %}
+      <li class="user-item {% if destinataire and user.id == destinataire.id %}active{% endif %}">
+        <a href="{% url 'conversation' user.id %}">
+          <div class="avatar"></div>
+          <div>
+            <div class="username">{{ user.username }}</div>
+            <div class="last-msg">
+              {% if user.last_message %}
+                {{ user.last_message.encrypted_content|truncatechars:30 }}
+                <span class="timestamp">{{ user.last_message.timestamp|date:"H:i" }}</span>
+              {% else %}
+                Pas de message
+              {% endif %}
+            </div>
+          </div>
+        </a>
+      </li>
+      {% endfor %}
+    </ul>
+
+    <!-- Bouton "Nouveau chat" -->
+    <div class="new-chat-section">
+      <button id="toggle-chat" class="new-chat-btn">+ Nouveau chat</button>
+    </div>
+  </div>
+
+  <!-- Zone de chat -->
+  <div class="chat-area chat-panel">
+    <!-- Header -->
+    <div class="chat-header">
+      <div class="avatar"></div>
+      <div class="chat-username">
+        {% if destinataire %}
+          {{ destinataire.username }}
+        {% else %}
+          Sélectionne une conversation
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="messages message-list">
+      {% for message in messages %}
+      <div class="message {% if message.sender == user %}you{% else %}other{% endif %}">
+        <p>{{ message.encrypted_content }}</p>
+        <span class="timestamp">{{ message.timestamp|date:"H:i" }}</span>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Envoi de message -->
+    <form method="POST" class="message-form message-input">
+      {% csrf_token %}
+      <input type="text" name="content" placeholder="Écrire un message..." required>
+      <button type="submit">Envoyer</button>
+    </form>
+  </div>
+</div>
+
+<!-- Popup de recherche -->
+<div id="chat-popup" class="user-popup hidden">
+  <div class="popup-content">
+    <div class="popup-header">
+      <h3>Nouveau Chat</h3>
+      <button id="close-popup" class="close-btn">&times;</button>
+    </div>
+    <input type="text" id="search-user" placeholder="Rechercher un utilisateur...">
+    <ul id="filtered-users">
+      {% for user in nouveaux_utilisateurs %}
+        <li><a href="{% url 'conversation' user.id %}">{{ user.username }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+
+<script>
+  const toggleBtn = document.getElementById('toggle-chat');
+  const popup = document.getElementById('chat-popup');
+  const closeBtn = document.getElementById('close-popup');
+  const searchInput = document.getElementById('search-user');
+
+  toggleBtn.addEventListener('click', () => {
+    popup.style.display = 'block';
+    searchInput.focus();
+  });
+
+  closeBtn.addEventListener('click', () => {
+    popup.style.display = 'none';
+    searchInput.value = '';
+    updateSearchList('');
+  });
+
+  searchInput.addEventListener('input', () => {
+    updateSearchList(searchInput.value.toLowerCase());
+  });
+
+  function updateSearchList(query) {
+    const list = document.getElementById('filtered-users');
+    const items = list.querySelectorAll('li');
+    let matchCount = 0;
+
+    const existingEmpty = list.querySelector('.no-user');
+    if (existingEmpty) existingEmpty.remove();
+
+    items.forEach(item => {
+      const visible = item.textContent.toLowerCase().includes(query);
+      item.style.display = visible ? '' : 'none';
+      if (visible) matchCount++;
+    });
+
+    if (matchCount === 0) {
+      const li = document.createElement('li');
+      li.className = 'no-user';
+      li.textContent = 'Aucun utilisateur trouvé';
+      li.style.padding = '10px';
+      li.style.color = '#888';
+      list.appendChild(li);
+    }
+  }
+</script>
+{% endblock %}

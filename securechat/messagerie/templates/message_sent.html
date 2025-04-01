@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="text-center mt-10">
+    <h2 class="text-2xl font-bold mb-4">✅ Message envoyé !</h2>
+    <a href="{% url 'conversations' %}" class="text-blue-600 underline hover:text-blue-800">
+        Retourner aux conversations
+    </a>
+</div>
+{% endblock %}

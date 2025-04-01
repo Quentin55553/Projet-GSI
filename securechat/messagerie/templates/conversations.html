@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="text-2xl font-bold mb-4">Conversations</h2>
+
+<ul class="space-y-2">
+    {% for u in utilisateurs %}
+        <li>
+            <a href="{% url 'discussion' u.username %}" class="text-blue-600 hover:underline">
+                💬 {{ u.username }}
+            </a>
+        </li>
+    {% empty %}
+        <li>Aucune conversation pour le moment.</li>
+    {% endfor %}
+</ul>
+{% endblock %}

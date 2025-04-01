@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h2 class="text-2xl font-bold mb-4">Conversation avec {{ destinataire.username }}</h2>
+
+<div class="border rounded p-4 mb-4 space-y-2 max-h-[400px] overflow-y-auto">
+    {% for message in messages %}
+        <div class="{% if message.sender == user %}text-right{% endif %}">
+            <div class="inline-block px-4 py-2 rounded-xl 
+                        {% if message.sender == user %}bg-blue-200{% else %}bg-gray-200{% endif %}">
+                <strong>{{ message.sender.username }}</strong><br>
+                {{ message.encrypted_content }}<br>
+                <span class="text-xs text-gray-500">{{ message.timestamp|date:"H:i d/m" }}</span>
+            </div>
+        </div>
+    {% empty %}
+        <p>Aucun message pour l’instant.</p>
+    {% endfor %}
+</div>
+
+<form method="POST" class="flex items-center space-x-2">
+    {% csrf_token %}
+    <textarea name="content" rows="1" class="w-full p-2 border rounded" placeholder="Écris ton message..."></textarea>
+    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">Envoyer</button>
+</form>
+{% endblock %}

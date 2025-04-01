@@ -1,0 +1,27 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}SecureChat{% endblock %}</title>
+    {% load static %}
+    <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+<body 
+class="bg-gray-100 text-gray-900">
+<header class="navbar">
+    <h1>SecureChat</h1>
+    <div class="nav-links">
+      {% if user.is_authenticated %}
+        <span>Bonjour, {{ user.username }} 👋</span>
+        <a href="{% url 'dashboard' %}">Tableau de bord</a>
+        <a href="{% url 'deconnexion' %}" class="logout">Se déconnecter</a>
+      {% else %}
+        <a href="{% url 'connexion' %}">Se connecter</a>
+        <a href="{% url 'inscription' %}">S'inscrire</a>
+      {% endif %}
+    </div>
+  </header>
+    {% block content %}{% endblock %}
+</body>
+</html>
