@@ -50,6 +50,7 @@ def EditProfile(request):
 
 
 def SignupPage(request):
+    print("CALL SIGNUP")
     if request.user.is_authenticated:
         return redirect("home")
     error_message = ""  # Initialize error_message as None
@@ -84,12 +85,12 @@ def SignupPage(request):
 
         else:
             # Create the user
+            print("CREATION USER")
             user = User.objects.create_user(username=uname, email=email, password=pass1)
             user.save()
             # Log the user in after registration
             login(request, user)
             return redirect("home")
-
     return render(request, "signup.html", {"error_message": error_message})
 
 

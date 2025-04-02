@@ -3,6 +3,8 @@ from chat.views import *
 from django.urls import path
 from django.conf import settings
 from django.contrib.staticfiles.urls import static
+from chat.views.view_utils import GetPreKeyBundle
+from chat.views.view_utils import get_user_bundle
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -18,6 +20,8 @@ urlpatterns = [
     path("search/", search, name="search"),
     # re_path(r"^.*/$", RedirectView.as_view(pattern_name="login", permanent=False)),
     path("chat/<str:username>/", chat, name="chat"),
+    path('prekey/<str:username>/', GetPreKeyBundle.as_view(), name='prekey-bundle'),
+    path('api/user_bundle/<str:username>/', get_user_bundle, name="get_user_bundle"),
 ]
 
 

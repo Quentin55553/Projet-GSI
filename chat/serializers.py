@@ -1,7 +1,12 @@
-from rest_framework import serializers
 from .models import Messages
 from django.contrib.auth.models import User
+from rest_framework import serializers
+from .models import UserKeys
 
+class UserKeysSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserKeys
+        fields = ['user', 'ik_public', 'spk_public', 'spk_signature']
 
 
 class MessageSerializer(serializers.ModelSerializer):

@@ -2,14 +2,10 @@ import socketio
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-
 from cryptography.hazmat.primitives import hashes
-
 from .ex_utils import ENCRYPT_X3DH, DECRYPT_X3DH, GENERATE_DH, DH, KDF_RK, RatchetEncrypt, RatchetDecrypt, Header
 import base64
 import argparse
-
-
 
 SERVER = 'http://localhost:8080'
 

@@ -1,6 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import os
+import json
+import base64
+from encrypted_model_fields.fields import EncryptedCharField
 
 
 class UserRelation(models.Model):
@@ -14,6 +19,45 @@ class UserRelation(models.Model):
     relation_key = models.CharField(max_length=255, blank=True, null=True)  # Add relation_key field
     def __str__(self):
         return f"{self.user.username} - {self.friend.username}"
+    
+class UserKeys(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="keys")
+    ik_private = models.TextField()  # Clé privée d'identité (chiffrée)
+    sik_private = models.TextField()  # Clé privée signée (chiffrée)
+    spk_private = models.TextField()  # Clé privée pré-signée (chiffrée)
+    ik_public = models.TextField()  # Clé publique
+    spk_public = models.TextField()  # Clé publique
+    spk_signature = models.TextField()  # Signature de la clé SPK
+
+    def __str__(self):
+        return f"Clés de {self.user.username}"
+
+
+class RatchetSession(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    peer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="peer_sessions")
+    encrypted_data = models.TextField()  # Stocke la session chiffrée
+    nonce = models.BinaryField()  # Stocke le nonce pour AES-GCM
+
+    def encrypt_data(self, session, key):
+        """ Chiffre l'état du Ratchet avec AES-GCM """
+        aesgcm = AESGCM(key)
+        nonce = os.urandom(12)  # 96-bit nonce
+        encrypted = aesgcm.encrypt(nonce, json.dumps(session).encode(), None)
+        
+        self.encrypted_data = base64.b64encode(encrypted).decode()
+        self.nonce = nonce
+        self.save()
+
+    def decrypt_data(self, key):
+        """ Déchiffre l'état du Ratchet """
+        if not self.encrypted_data:
+            return {}
+
+        aesgcm = AESGCM(key)
+        encrypted = base64.b64decode(self.encrypted_data)
+        decrypted = aesgcm.decrypt(self.nonce, encrypted, None)
+        return json.loads(decrypted.decode())
 
 
 class Messages(models.Model):

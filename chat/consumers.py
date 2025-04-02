@@ -1,3 +1,4 @@
+"""
 import json
 from channels.generic.websocket import AsyncWebsocketConsumer
 
@@ -68,4 +69,75 @@ class ChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             'message': message,
             'sender': sender
+        }))
+"""
+
+import json
+from channels.generic.websocket import AsyncWebsocketConsumer
+from django.contrib.auth.models import User
+from .models import RatchetSession, UserKeys
+from .crypto import SignalUser
+
+class ChatConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        if self.user.is_authenticated:
+            await self.accept()
+        else:
+            await self.close()
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        recipient_username = data['username']
+        message = data['message']
+
+        recipient = User.objects.get(username=recipient_username)
+        recipient_keys = UserKeys.objects.get(user=recipient)
+
+        # Charger la session Double Ratchet
+        sender_keys = UserKeys.objects.get(user=self.user)
+        signal_user = SignalUser(self.user, sender_keys)
+
+        ratchet_session, _ = RatchetSession.objects.get_or_create(user=self.user, peer=recipient)
+        signal_user.ratchet_session[recipient_username] = ratchet_session.load_session()
+
+        # Chiffrer le message
+        encrypted_message = signal_user.encrypt_message(recipient_username, message)
+
+        # Sauvegarder l'état du Ratchet
+        ratchet_session.save_session(signal_user.ratchet_session[recipient_username])
+
+        # Envoyer le message au destinataire
+        await self.channel_layer.group_send(
+            recipient_username,
+            {
+                "type": "chat.message",
+                "sender": self.user.username,
+                "message": encrypted_message
+            }
+        )
+
+    async def chat_message(self, event):
+        sender_username = event["sender"]
+        encrypted_message = event["message"]
+
+        sender = User.objects.get(username=sender_username)
+        sender_keys = UserKeys.objects.get(user=sender)
+
+        # Charger la session Double Ratchet
+        receiver_keys = UserKeys.objects.get(user=self.user)
+        signal_user = SignalUser(self.user, receiver_keys)
+
+        ratchet_session, _ = RatchetSession.objects.get_or_create(user=self.user, peer=sender)
+        signal_user.ratchet_session[sender_username] = ratchet_session.load_session()
+
+        # Déchiffrer le message
+        decrypted_message = signal_user.decrypt_message(sender_username, encrypted_message)
+
+        # Sauvegarder l'état du Ratchet
+        ratchet_session.save_session(signal_user.ratchet_session[sender_username])
+
+        await self.send(text_data=json.dumps({
+            "sender": sender_username,
+            "message": decrypted_message
         }))

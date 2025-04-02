@@ -2,6 +2,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
+from cryptography.fernet import Fernet
+
+# Générer une nouvelle clé (exécute une seule fois et stocke-la en sécurité)
+key=Fernet.generate_key().decode()
+print(key)
+
+FIELD_ENCRYPTION_KEY = os.getenv("FIELD_ENCRYPTION_KEY", key)
+
 load_dotenv()
 
 DEVELOPMENT = "live"
@@ -73,8 +81,11 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "chat",
+    "rest_framework",
+    "encrypted_model_fields",
     "corsheaders",
 ]
+
 ASGI_APPLICATION = "devnoms.asgi.application"
 
 CHANNEL_LAYERS = {
@@ -164,3 +175,6 @@ CSRF_TRUSTED_ORIGINS = [
     "https://devnoms.onrender.com",
     "https://django-chat-application.onrender.com",
 ]
+
+
+print("SETTINGS LOADED")
