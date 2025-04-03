@@ -20,6 +20,21 @@ class UserRelation(models.Model):
     def __str__(self):
         return f"{self.user.username} - {self.friend.username}"
     
+class Messages(models.Model):
+    description = models.TextField()
+    sender_name = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="sender"
+    )
+    receiver_name = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="receiver"
+    )
+    time = models.TimeField(auto_now_add=True)
+    seen = models.BooleanField(default=False)
+    timestamp = models.DateTimeField(default=timezone.now, blank=True)
+
+    class Meta:
+        ordering = ("timestamp",)
+    
 class UserKeys(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="keys")
     ik_private = models.TextField()  # Clé privée d'identité (chiffrée)
@@ -41,6 +56,24 @@ class UserKeys(models.Model):
             "spk_public": self.spk_public,
             "spk_signature": self.spk_signature,
          })
+
+class UserSession(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_sessions")
+    peer = models.TextField()
+    ik = models.TextField()
+    spk = models.TextField()
+
+    def __str__(self):
+        return f"Session {self.user.username} -> {self.peer}"
+    
+class X3DH_Session(models.Model):
+    user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
+    sk = models.TextField()  # Clé secrète partagée
+    spk = models.TextField()  # Clé publique de Bob
+    ad = models.TextField()  # Données supplémentaires associées
+
+    def __str__(self):
+        return f"X3DH Session {self.user_session.user.username} -> {self.user_session.peer}"
 
 
 class RatchetSession(models.Model):
@@ -69,18 +102,11 @@ class RatchetSession(models.Model):
         decrypted = aesgcm.decrypt(self.nonce, encrypted, None)
         return json.loads(decrypted.decode())
 
+class X3DHExchange(models.Model):
+    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_x3dh")
+    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_x3dh")
+    ik = models.TextField()  # Clé identité publique de l'expéditeur
+    epk = models.TextField()  # Clé éphémère publique de l'expéditeur
+    cipher_text = models.TextField()  # Message chiffré
+    hmac = models.TextField()  # Code d'authentification
 
-class Messages(models.Model):
-    description = models.TextField()
-    sender_name = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="sender"
-    )
-    receiver_name = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="receiver"
-    )
-    time = models.TimeField(auto_now_add=True)
-    seen = models.BooleanField(default=False)
-    timestamp = models.DateTimeField(default=timezone.now, blank=True)
-
-    class Meta:
-        ordering = ("timestamp",)

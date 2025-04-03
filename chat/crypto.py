@@ -11,7 +11,13 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import serialization
 from .models import User
 from .models import UserKeys
+from .models import UserSession
+from .models import X3DH_Session
 import json
+import requests
+import base64
+from django.conf import settings
+
 
 #----------------------------------------------------------------------------------------------------------- Utilitaires
 
@@ -363,7 +369,7 @@ class SignalUser:
 
     def get_keys(self, opk_size=10):
         """
-        Cette fonction . 
+        
         """
         self.ik = x25519.X25519PrivateKey.generate()
         self.sik = ed25519.Ed25519PrivateKey.generate()
@@ -386,37 +392,13 @@ class SignalUser:
         }
     
 
-    def request_user_prekey_bundle(self, username):
-        #res = sio.call("request_prekey", {"username": username})
-        user = User.objects.get(username=username)
-        if(not user):
-            raise Exception(f"User {username} not registered")
-        data = json.loads(user.keys.bundle().content)
-        ik_bytes = deserialize(data["ik_public"])
-        sik_bytes = deserialize(data["sik_public"])
-        spk_bytes = deserialize(data["spk_public"])
-        spk_sig_bytes = deserialize(data["spk_signature"])
-        
-        ik = x25519.X25519PublicKey.from_public_bytes(ik_bytes)
-        sik = ed25519.Ed25519PublicKey.from_public_bytes(sik_bytes)
-        spk = x25519.X25519PublicKey.from_public_bytes(spk_bytes)
-
-        try:
-            sik.verify(spk_sig_bytes, spk_bytes)
-        except:
-            raise Exception("SPK verification failed")
-
-        self.sessions[username] = {
-            'ik': ik,
-            'spk': spk
-        }
-
+    
     def send_message(self, username, msg):
         ad = self.x3dh_session[username]['ad']
         header, ciphertext = RatchetEncrypt(self.ratchet_session[username], msg.encode('utf-8'), ad.encode('utf-8'))
         ciphertext, mac = ciphertext
         self.messages[username].append((self.username, msg ))
-        return sio.call("ratchet_msg", {'username': username,'cipher': serialize(ciphertext), 'header': header.serialize(), 'hmac': serialize(mac), 'from': self.username})
+        #return sio.call("ratchet_msg", {'username': username,'cipher': serialize(ciphertext), 'header': header.serialize(), 'hmac': serialize(mac), 'from': self.username})
         
     def is_connected(self, username):
         if username in self.x3dh_session:
@@ -469,8 +451,10 @@ class SignalUser:
             return False
         
         return True
+    
+    
 
-
+    """
     def perform_x3dh(self, username):
         if(not username in self.sessions):
             print("User key bundles not requested!")
@@ -511,3 +495,103 @@ class SignalUser:
         else:
             print("DH Failed!")
         return res
+    """
+
+def request_user_prekey_bundle(self:User, username:str):
+    user = User.objects.get(username=username)
+    if(not user):
+        raise Exception(f"User {username} not registered")
+    data = json.loads(user.keys.bundle().content)
+    ik_bytes = deserialize(data["ik_public"])
+    sik_bytes = deserialize(data["sik_public"])
+    spk_bytes = deserialize(data["spk_public"])
+    spk_sig_bytes = deserialize(data["spk_signature"])
+        
+    ik = x25519.X25519PublicKey.from_public_bytes(ik_bytes)
+    sik = ed25519.Ed25519PublicKey.from_public_bytes(sik_bytes)
+    spk = x25519.X25519PublicKey.from_public_bytes(spk_bytes)
+
+    try:
+        sik.verify(spk_sig_bytes, spk_bytes)
+    except:
+        raise Exception("SPK verification failed")
+
+    session=UserSession.objects.create(
+        user=self,
+        peer=username,
+        ik=serialize(ik.public_bytes_raw()),
+        spk=serialize(spk.public_bytes_raw())
+    )
+   
+def perform_x3dh(self:User, username:str):
+    """Exécute l'échange X3DH d'Alice à Bob en envoyant les données via une requête Django"""
+        
+    # Une première étape est de générer les 3 clés DH à partir du bundle de clés publiques du destinataire et de la clé privée d'identité de l'émetteur
+    try:
+        # Session Alice -> Bob
+        user_session = UserSession.objects.get(user=self, peer=username)
+    except UserSession.DoesNotExist:
+        raise ValueError(f"Session not found for user {username}!")
+    
+    alice = User.objects.get(username=self.username)
+    alice_ik_bytes=deserialize(alice.keys.ik_private)
+    alice_ik = x25519.X25519PrivateKey.from_private_bytes(alice_ik_bytes)
+    bob_spk=x25519.X25519PublicKey.from_public_bytes(deserialize(user_session.spk))
+    bob_ik=x25519.X25519PublicKey.from_public_bytes(deserialize(user_session.ik))
+    alice_epk = x25519.X25519PrivateKey.generate()
+
+    dh1 = alice_ik.exchange(bob_spk)
+    dh2 = alice_epk.exchange(bob_ik)
+    dh3 = alice_epk.exchange(bob_spk)
+
+    info = b"extended_triple_diffie_hellman"
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"\x00"*32,
+        info=info,
+    )
+
+    f = b"\xff" * 32
+    km = dh1 + dh2 + dh3
+    SK = hkdf.derive(f + km)
+
+    alice_epk_pub = alice_epk.public_key()
+    alice_epk_pub_bytes = alice_epk_pub.public_bytes_raw()
+    alice_ik_bytes = alice_ik.public_key().public_bytes_raw()
+    bob_ik_bytes = deserialize(user_session.ik)
+    del alice_epk, dh1, dh2, dh3
+
+    ad = serialize(alice_ik_bytes) + serialize(bob_ik_bytes)
+    msg = "##CHAT_START##"
+    ciphertext, hmac = ENCRYPT_X3DH(SK, msg.encode('utf-8'), ad.encode('utf-8'))
+
+    #self.x3dh_session[username] = {"sk": SK, "spk": self.sessions[username]['spk'], "ad": ad}
+    # Création de l'objet X3DH_Session après l'échange
+    X3DH_Session.objects.create(
+        user_session=user_session,
+        sk=SK,
+        spk=user_session.spk,
+        ad=ad
+    )
+
+    return
+    """
+        # Envoi de la requête avec le message chiffré vers Django pour qu'il le transmette au destinataire
+        url = "localhost:8000/x3dh_message/"
+        response = requests.post(url, json={
+            "username": username,
+            "from": self.username,
+            "ik": serialize(ik_bytes),
+            "epk": serialize(epk_pub_bytes),
+            "cipher":serialize(ciphertext),
+            "hmac": serialize(hmac)
+        })
+
+        if response.status_code == 200:
+            self.init_ratchet_transmission(username)
+            return True
+        else:
+            print("X3DH Failed!")
+            return False
+    """

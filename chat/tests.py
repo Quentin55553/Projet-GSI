@@ -6,6 +6,8 @@ from django.core.management import call_command
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives.asymmetric import ed25519
 from .crypto import serialize,deserialize
+from .crypto import perform_x3dh
+from .crypto import *
 import json
 
 class UserKeysTests(TestCase):
@@ -95,7 +97,7 @@ class UserKeysTests(TestCase):
         except:
             self.fail("SPK verification failed!")
 
-        print("Test réussi : La vérification SPK fonctionne.")
+        print("Test réussi : La vérification SPK fonctionne pour un utilisateur.")
 
 
 class RatchetTests(TestCase):
@@ -104,3 +106,86 @@ class RatchetTests(TestCase):
         User.objects.all().delete()
         UserKeys.objects.all().delete()
         call_command('flush', '--no-input')
+        
+#------------------------------------------------------------------------------------ Tests relatifs à l'échange X3DH
+
+class X3DHTests(TestCase):
+    def setUp(self):
+        User.objects.all().delete()
+        UserKeys.objects.all().delete()
+        call_command('flush', '--no-input')
+        # Alice et Bob
+        self.alice = User.objects.create_user(username="alice", password="password")
+        self.bob = User.objects.create_user(username="bob", password="password")
+        # Vérifier que les clés ont bien été générées automatiquement
+        self.assertIsNotNone(self.alice.keys)
+        self.assertIsNotNone(self.bob.keys)
+
+    def test_SESSION_CREATION(self):
+        """Un objet UserSession est bien créé quand on appelle request_user_prekey_bundle()."""
+        print()
+        request_user_prekey_bundle(self.alice,"bob")
+
+        user_session = UserSession.objects.filter(user=self.alice, peer="bob").first()
+        self.assertIsNotNone(user_session, "La session entre Alice et Bob n'a pas été créée.")
+        self.assertTrue(user_session.ik, "La clé ik n'est pas présente dans la session.")
+        self.assertTrue(user_session.spk, "La clé spk n'est pas présente dans la session.")
+        self.assertIsInstance(user_session.ik, str, "La clé ik n'est pas une chaîne de caractères.")
+        self.assertIsInstance(user_session.spk, str, "La clé spk n'est pas une chaîne de caractères.")
+    
+        print("Test réussi : La session a bien été créée et les clés sont présentes.")
+
+    
+    def test_X3DH_KEY_EXCHANGE(self):
+        "Test de l'échange de clés X3DH entre Alice et Bob"
+        print()
+        request_user_prekey_bundle(self.alice,"bob")
+
+        alice_keys = self.alice.keys
+
+        perform_x3dh(self.alice, "bob")
+        try:
+            session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+            self.assertIsNotNone(session)  
+            self.assertEqual(session.user_session.user, self.alice)  
+            self.assertEqual(session.user_session.peer, "bob")
+        except X3DH_Session.DoesNotExist:
+            self.fail("X3DH_Session not created after perform_x3dh")
+
+        # Vérification de la structure du session key
+        self.assertIsNotNone(session.sk)
+        self.assertIsNotNone(session.spk)
+        self.assertIsNotNone(session.ad)
+
+        print("Test réussi : La session X3DH a bien été créée après perform_x3dh().")
+    
+
+    """
+    def test_X3DH_ENCRYPTION_DECRYPTION(self):
+        "Test du chiffrement et déchiffrement avec X3DH"
+        session = perform_x3dh(self.alice, self.bob.keys)
+        sk = session["sk"]
+        ad = session["ad"]
+
+        message = "Hello Bob!"
+        ciphertext, hmac = ENCRYPT_X3DH(sk, message.encode("utf-8"), ad.encode("utf-8"))
+
+        self.assertIsNotNone(ciphertext)
+        self.assertIsNotNone(hmac)
+
+        # Bob déchiffrerait le message avec Double Ratchet.
+        print(f"Message chiffré : {ciphertext}")
+        print(f"HMAC : {hmac}")
+
+    def test_SEND_X3DH_MESSAGE(self):
+        "Test de l'envoi d'un message via l'API"
+        self.client.login(username="alice", password="password")
+
+        response = self.client.post(
+            reverse("send_x3dh_message"),
+            {"username": "bob", "message": "Salut Bob !"},
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("success", response.json())"""

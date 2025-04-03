@@ -4,7 +4,7 @@ import os
 
 from cryptography.fernet import Fernet
 
-# Générer une nouvelle clé (exécute une seule fois et stocke-la en sécurité)
+# Générer une nouvelle clé
 key=Fernet.generate_key().decode()
 print(key)
 
