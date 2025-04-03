@@ -3,7 +3,6 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 from chat.models import UserKeys
 from chat.models import User
-from chat.models import X3DHExchange
 from chat.models import X3DH_Message
 from chat.serializers import UserKeysSerializer
 from django.shortcuts import get_object_or_404
@@ -24,7 +23,6 @@ def get_user_bundle(request, username):
         "spk_public": user_keys.spk_public,
         "spk_signature": user_keys.spk_signature,
     })
-
 
 
 @csrf_exempt

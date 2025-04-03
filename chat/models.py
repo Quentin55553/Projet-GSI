@@ -1,3 +1,10 @@
+"""
+Les models sont une partie importante de Django. 
+Ils décrivent la structure des objets présents dans la base de données, qui est gérée automatiquement par Django quand des objets sont créés, modifiés 
+ou supprimés dans le code.
+"""
+#--------------------------------------------------------------------------------------------------- Imports
+
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -7,8 +14,13 @@ import json
 import base64
 from django.http import JsonResponse
 
+#--------------------------------------------------------------------------------------------------------- Models
 
 class UserRelation(models.Model):
+    """
+    Un modèle utilisé dans l'application que nous avons reprise. Il représente une relation d'un utilisateur à un possible ami ("possible" car cet objet est
+    créé au moment de l'envoi d'une demande d'ami, qui peut-être refusée).
+    """
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="user_relations"
     )
@@ -17,6 +29,7 @@ class UserRelation(models.Model):
     )
     accepted = models.BooleanField(default=False)
     relation_key = models.CharField(max_length=255, blank=True, null=True)  # Add relation_key field
+
     def __str__(self):
         return f"{self.user.username} - {self.friend.username}"
     
@@ -34,8 +47,21 @@ class Messages(models.Model):
 
     class Meta:
         ordering = ("timestamp",)
-    
+
 class UserKeys(models.Model):
+    """
+    Ce modèle est particulièrement important et représente l'ensemble des clés d'un utilisateur (publiques comme privées)
+    Les clés sont les suivantes :
+    - ik_private : Clé privée d'identité (Identity Key - IK). Elle est unique et fixe pour l’utilisateur. Elle doit rester secrète.
+    - sik_private : 
+    - spk_private : 
+    - ik_public : Clé publique d'identité. Partagée avec d'autres utilisateurs pour établir une communication sécurisée.
+    - sik_public : 
+    - spk_public : 
+    - spk_signature : 
+
+    Ces clés sont générées à partir de la courbe elliptique X25519.
+    """
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="keys")
     ik_private = models.TextField()  # Clé privée d'identité (chiffrée)
     sik_private = models.TextField()  # Clé privée signée (chiffrée)
@@ -49,6 +75,9 @@ class UserKeys(models.Model):
         return f"Clés de {self.user.username}"
     
     def bundle(self):
+        """
+        Méthode utilisée pour obtenir les clés publiques de l'utilisateur. 
+        """
         return JsonResponse({
             "username": self.user.username,
             "ik_public": self.ik_public,
@@ -69,7 +98,7 @@ class UserSession(models.Model):
 class X3DH_Session(models.Model):
     user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
     sk = models.TextField()  # Clé secrète partagée
-    spk = models.TextField()  # Clé publique de Bob
+    spk = models.TextField() 
     epk = models.TextField()
     ad = models.TextField()  # Données supplémentaires associées
 
@@ -77,6 +106,11 @@ class X3DH_Session(models.Model):
         return f"X3DH Session {self.user_session.user.username} -> {self.user_session.peer}"
 
 class X3DH_Message(models.Model):
+    """
+    Ce modèle représente le message qu'envoie Alice à Bob lors du protocole X3DH. (voir crypto.py)
+    Il contient les informations sur le destinataire et l'émetteur, la clé éphémère générée par l'émetteur et sa clé (publique) d'identité.
+    Il contient aussi le message chiffré et sa signature numérique.
+    """
     receiver = models.ForeignKey(User, on_delete=models.CASCADE)
     sender = models.TextField()
     ik = models.TextField()
@@ -110,12 +144,3 @@ class RatchetSession(models.Model):
         encrypted = base64.b64decode(self.encrypted_data)
         decrypted = aesgcm.decrypt(self.nonce, encrypted, None)
         return json.loads(decrypted.decode())
-
-class X3DHExchange(models.Model):
-    sender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="sent_x3dh")
-    recipient = models.ForeignKey(User, on_delete=models.CASCADE, related_name="received_x3dh")
-    ik = models.TextField()  # Clé identité publique de l'expéditeur
-    epk = models.TextField()  # Clé éphémère publique de l'expéditeur
-    cipher_text = models.TextField()  # Message chiffré
-    hmac = models.TextField()  # Code d'authentification
-
