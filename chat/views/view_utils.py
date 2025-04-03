@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from chat.models import UserKeys
 from chat.models import User
 from chat.models import X3DHExchange
+from chat.models import X3DH_Message
 from chat.serializers import UserKeysSerializer
 from django.shortcuts import get_object_or_404
 from django.http import JsonResponse
@@ -12,15 +13,6 @@ from chat.crypto import perform_x3dh, serialize, ENCRYPT_X3DH
 from django.views.decorators.csrf import csrf_exempt
 import json
 import base64
-
-class GetPreKeyBundle(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request, username):
-        user = get_object_or_404(User, username=username)
-        user_keys = get_object_or_404(UserKeys, user=user)
-        serializer = UserKeysSerializer(user_keys)
-        return Response(serializer.data)
 
 def get_user_bundle(request, username):
     """Retourne le bundle de clés d'un utilisateur"""
@@ -34,6 +26,61 @@ def get_user_bundle(request, username):
     })
 
 
+
+@csrf_exempt
+def x3dh_message(request):
+    if request.method == "POST":
+        try:
+            data = json.loads(request.body)
+
+            username = data.get("username")
+            sender = data.get("from")
+            ik = data.get("ik")
+            epk = data.get("epk")
+            cipher = data.get("cipher")
+            hmac = data.get("hmac")
+
+            if not all([username, sender, ik, epk, cipher, hmac]):
+                return JsonResponse({"error": "Missing parameters"}, status=400)
+
+            print(f"SERVEUR : Message X3DH envoyé de {sender} pour {username}")
+
+            receiver = User.objects.get(username=username)
+
+            X3DH_Message.objects.create(
+                receiver=receiver,
+                sender=sender,
+                ik=ik,
+                epk=epk,
+                cipher=cipher,
+                hmac=hmac
+            )
+
+            print(f"SERVEUR : Message X3DH stocké de {sender} pour {username}")
+
+            return JsonResponse({"status": "Message X3DH relayé avec succès"}, status=200)
+
+        except json.JSONDecodeError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
+
+    return JsonResponse({"error": "Invalid request method"}, status=405)
+
+def get_x3dh_message(username: str):
+    """Récupère le message X3DH stocké pour Bob"""
+    try:
+        msg = X3DH_Message.objects.get(receiver__username=username)
+        return {
+            "username": username,
+            "from": msg.sender,
+            "ik": msg.ik,
+            "epk": msg.epk,
+            "cipher": msg.cipher,
+            "hmac": msg.hmac
+        }
+    except X3DH_Message.DoesNotExist:
+        return None
+
+"""
 @csrf_exempt
 def x3dh_message(request):
     if request.method == "POST":
@@ -66,9 +113,9 @@ def x3dh_message(request):
 
 @api_view(['POST'])
 def send_x3dh_message(request):
-    """
+    "
     Vue Django pour envoyer un message en utilisant X3DH.
-    """
+    "
     sender = request.user  # L'utilisateur qui envoie le message
     receiver_username = request.data.get("username")
     message = request.data.get("message", "##CHAT_START##")
@@ -107,3 +154,4 @@ def send_x3dh_message(request):
 
     return Response({"success": "Message envoyé avec succès"})
 
+"""

@@ -21,6 +21,8 @@ from django.conf import settings
 
 #----------------------------------------------------------------------------------------------------------- Utilitaires
 
+SERVER_URL = "http://localhost:8000"
+
 def serialize(val):
     """Utilisé pour encoder des octets en base 64 (pour stocker des clés dans la base de données notamment)"""
     return base64.standard_b64encode(val).decode('utf-8')
@@ -489,7 +491,7 @@ def request_user_prekey_bundle(self:User, username:str):
         spk=serialize(spk.public_bytes_raw())
     )
    
-def perform_x3dh(self:User, username:str):
+def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
     """Exécute l'échange X3DH d'Alice à Bob en envoyant les données via une requête Django"""
         
     # Une première étape est de générer les 3 clés DH à partir du bundle de clés publiques du destinataire et de la clé privée d'identité de l'émetteur
@@ -532,9 +534,8 @@ def perform_x3dh(self:User, username:str):
     msg = "##CHAT_START##"
     ciphertext, hmac = ENCRYPT_X3DH(SK, msg.encode('utf-8'), ad.encode('utf-8'))
 
-    #self.x3dh_session[username] = {"sk": SK, "spk": self.sessions[username]['spk'], "ad": ad}
     # Création de l'objet X3DH_Session après l'échange
-    X3DH_Session.objects.create(
+    session=X3DH_Session.objects.create(
         user_session=user_session,
         sk=serialize(SK),
         spk=user_session.spk,
@@ -542,26 +543,27 @@ def perform_x3dh(self:User, username:str):
         ad=ad
     )
 
-    return ciphertext,hmac
-    """
-        # Envoi de la requête avec le message chiffré vers Django pour qu'il le transmette au destinataire
-        url = "localhost:8000/x3dh_message/"
-        response = requests.post(url, json={
-            "username": username,
-            "from": self.username,
-            "ik": serialize(ik_bytes),
-            "epk": serialize(epk_pub_bytes),
-            "cipher":serialize(ciphertext),
-            "hmac": serialize(hmac)
-        })
+    #return ciphertext,hmac
 
-        if response.status_code == 200:
-            self.init_ratchet_transmission(username)
-            return True
-        else:
-            print("X3DH Failed!")
-            return False
-    """
+    # Envoi de la requête avec le message chiffré vers Django pour qu'il le transmette au destinataire
+    url = server_url + "/x3dh_message/"
+    response = requests.post(url, json={
+        "username": username,
+        "from": self.username,
+        "ik": self.keys.ik_public,
+        "epk": session.epk,
+        "cipher":serialize(ciphertext),
+        "hmac": serialize(hmac)
+    })
+    
+    if response.status_code == 200:
+        #print("X3DH Message sent.")
+        #self.init_ratchet_transmission(username)
+        return True
+    else:
+        print("X3DH Failed!")
+        return False
+
 
 def receive_x3dh(self:User, username:str, data):
     #print(data)

@@ -1,4 +1,6 @@
 from django.test import TestCase
+from django.test import LiveServerTestCase
+import requests
 from django.contrib.auth.models import User
 from .models import UserKeys
 from django.urls import reverse
@@ -8,6 +10,7 @@ from cryptography.hazmat.primitives.asymmetric import ed25519
 from .crypto import serialize,deserialize
 from .crypto import perform_x3dh
 from .crypto import *
+from chat.views.view_utils import *
 import json
 
 class UserKeysTests(TestCase):
@@ -109,7 +112,7 @@ class RatchetTests(TestCase):
         
 #------------------------------------------------------------------------------------ Tests relatifs à l'échange X3DH
 
-class X3DHTests(TestCase):
+class X3DHTests(LiveServerTestCase):
     def setUp(self):
         User.objects.all().delete()
         UserKeys.objects.all().delete()
@@ -136,11 +139,11 @@ class X3DHTests(TestCase):
         print("Test réussi : La session a bien été créée et les clés sont présentes.")
 
     def test_X3DH_ALICE(self):
-        "Test de le démarrage l'échange de clés X3DH entre Alice et Bob (côté Alice)"
+        "Test le démarrage de l'échange de clés X3DH entre Alice et Bob (côté Alice)"
         print()
         request_user_prekey_bundle(self.alice,"bob")
 
-        perform_x3dh(self.alice, "bob")
+        perform_x3dh(self.alice, "bob",f"{self.live_server_url}")
         try:
             session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
             self.assertIsNotNone(session)  
@@ -162,7 +165,29 @@ class X3DHTests(TestCase):
         print()
         request_user_prekey_bundle(self.alice,"bob")
 
-        ciphertext,hmac=perform_x3dh(self.alice, "bob")
+        if(perform_x3dh(self.alice, "bob",f"{self.live_server_url}")):
+            session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+        else:
+            self.fail("Le X3DH n'a pas fonctionné (Alice)")
+
+        data = get_x3dh_message("bob")
+        if data is None:
+            self.fail("Bob n'a pas reçu le message X3DH")
+
+        res=receive_x3dh(self.bob,"alice",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
+        print(res[1].decode('utf-8'))
+
+        print("Test réussi : L'échange de clés X3DH complet a réussi.")
+
+    """
+    def test_X3DH_KEY_EXCHANGE_old(self):
+        "Test de l'échange de clés X3DH entre Alice et Bob"
+        print()
+        request_user_prekey_bundle(self.alice,"bob")
+
+        ciphertext,hmac=perform_x3dh(self.alice, "bob",f"{self.live_server_url}")
         session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
 
         session_data = json.dumps({
@@ -182,34 +207,4 @@ class X3DHTests(TestCase):
         #print(res[1].decode('utf-8'))
 
         print("Test réussi : L'échange de clés X3DH a réussi.")
-    
-
     """
-    def test_X3DH_ENCRYPTION_DECRYPTION(self):
-        "Test du chiffrement et déchiffrement avec X3DH"
-        session = perform_x3dh(self.alice, self.bob.keys)
-        sk = session["sk"]
-        ad = session["ad"]
-
-        message = "Hello Bob!"
-        ciphertext, hmac = ENCRYPT_X3DH(sk, message.encode("utf-8"), ad.encode("utf-8"))
-
-        self.assertIsNotNone(ciphertext)
-        self.assertIsNotNone(hmac)
-
-        # Bob déchiffrerait le message avec Double Ratchet.
-        print(f"Message chiffré : {ciphertext}")
-        print(f"HMAC : {hmac}")
-
-    def test_SEND_X3DH_MESSAGE(self):
-        "Test de l'envoi d'un message via l'API"
-        self.client.login(username="alice", password="password")
-
-        response = self.client.post(
-            reverse("send_x3dh_message"),
-            {"username": "bob", "message": "Salut Bob !"},
-            content_type="application/json",
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("success", response.json())"""

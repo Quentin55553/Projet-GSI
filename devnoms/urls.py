@@ -3,8 +3,8 @@ from chat.views import *
 from django.urls import path
 from django.conf import settings
 from django.contrib.staticfiles.urls import static
-from chat.views.view_utils import GetPreKeyBundle
 from chat.views.view_utils import get_user_bundle
+from chat.views.view_utils import x3dh_message
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -18,10 +18,9 @@ urlpatterns = [
     path("accept_request/", accept_request, name="accept_request"),
     path("delete_friend/", delete_friend, name="delete_friend"),
     path("search/", search, name="search"),
-    # re_path(r"^.*/$", RedirectView.as_view(pattern_name="login", permanent=False)),
     path("chat/<str:username>/", chat, name="chat"),
-    path('prekey/<str:username>/', GetPreKeyBundle.as_view(), name='prekey-bundle'),
     path('api/user_bundle/<str:username>/', get_user_bundle, name="get_user_bundle"),
+    path("x3dh_message/", x3dh_message, name="x3dh_message"),
 ]
 
 

@@ -76,6 +76,14 @@ class X3DH_Session(models.Model):
     def __str__(self):
         return f"X3DH Session {self.user_session.user.username} -> {self.user_session.peer}"
 
+class X3DH_Message(models.Model):
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE)
+    sender = models.TextField()
+    ik = models.TextField()
+    epk = models.TextField()
+    cipher = models.TextField()
+    hmac = models.TextField()
+
 
 class RatchetSession(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
