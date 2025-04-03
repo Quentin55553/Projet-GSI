@@ -22,6 +22,7 @@ def get_user_bundle(request, username):
     return JsonResponse({
         "username": username,
         "ik_public": user_keys.ik_public,
+        "sik_public":user_keys.sik_public,
         "spk_public": user_keys.spk_public,
         "spk_signature": user_keys.spk_signature,
     })

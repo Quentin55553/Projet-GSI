@@ -5,7 +5,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import os
 import json
 import base64
-from encrypted_model_fields.fields import EncryptedCharField
+from django.http import JsonResponse
 
 
 class UserRelation(models.Model):
@@ -25,12 +25,22 @@ class UserKeys(models.Model):
     ik_private = models.TextField()  # Clé privée d'identité (chiffrée)
     sik_private = models.TextField()  # Clé privée signée (chiffrée)
     spk_private = models.TextField()  # Clé privée pré-signée (chiffrée)
-    ik_public = models.TextField()  # Clé publique
-    spk_public = models.TextField()  # Clé publique
+    ik_public = models.TextField()  # Clé publique IK
+    sik_public = models.TextField() # Clé publique SIK
+    spk_public = models.TextField()  # Clé publique SPK
     spk_signature = models.TextField()  # Signature de la clé SPK
 
     def __str__(self):
         return f"Clés de {self.user.username}"
+    
+    def bundle(self):
+        return JsonResponse({
+            "username": self.user.username,
+            "ik_public": self.ik_public,
+            "sik_public": self.sik_public,
+            "spk_public": self.spk_public,
+            "spk_signature": self.spk_signature,
+         })
 
 
 class RatchetSession(models.Model):

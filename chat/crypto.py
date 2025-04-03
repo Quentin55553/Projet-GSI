@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import serialization
 from .models import User
 from .models import UserKeys
+import json
 
 #----------------------------------------------------------------------------------------------------------- Utilitaires
 
@@ -19,7 +20,7 @@ def serialize(val):
     return base64.standard_b64encode(val).decode('utf-8')
 
 def deserialize(val):
-    """Utilisé pour décoder des octets qui ont été encodé en base 64"""
+    """Utilisé pour décoder des octets qui ont été encodés en base 64"""
     return base64.standard_b64decode(val.encode('utf-8'))
 
 
@@ -386,14 +387,15 @@ class SignalUser:
     
 
     def request_user_prekey_bundle(self, username):
-        res = sio.call("request_prekey", {"username": username})
-        if(not res[0]):
+        #res = sio.call("request_prekey", {"username": username})
+        user = User.objects.get(username=username)
+        if(not user):
             raise Exception(f"User {username} not registered")
-        data = res[1]
-        ik_bytes = deserialize(data["ik"])
-        sik_bytes = deserialize(data["sik"])
-        spk_bytes = deserialize(data["spk"])
-        spk_sig_bytes = deserialize(data["spk_sign"])
+        data = json.loads(user.keys.bundle().content)
+        ik_bytes = deserialize(data["ik_public"])
+        sik_bytes = deserialize(data["sik_public"])
+        spk_bytes = deserialize(data["spk_public"])
+        spk_sig_bytes = deserialize(data["spk_signature"])
         
         ik = x25519.X25519PublicKey.from_public_bytes(ik_bytes)
         sik = ed25519.Ed25519PublicKey.from_public_bytes(sik_bytes)
