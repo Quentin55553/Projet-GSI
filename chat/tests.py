@@ -156,6 +156,7 @@ class X3DHTests(TestCase):
         self.assertIsNotNone(session.sk)
         self.assertIsNotNone(session.spk)
         self.assertIsNotNone(session.ad)
+        #print(session.sk)
 
         print("Test réussi : La session X3DH a bien été créée après perform_x3dh().")
     

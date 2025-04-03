@@ -570,7 +570,7 @@ def perform_x3dh(self:User, username:str):
     # Création de l'objet X3DH_Session après l'échange
     X3DH_Session.objects.create(
         user_session=user_session,
-        sk=SK,
+        sk=serialize(SK),
         spk=user_session.spk,
         ad=ad
     )
