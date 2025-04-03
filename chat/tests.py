@@ -135,13 +135,10 @@ class X3DHTests(TestCase):
     
         print("Test réussi : La session a bien été créée et les clés sont présentes.")
 
-    
-    def test_X3DH_KEY_EXCHANGE(self):
-        "Test de l'échange de clés X3DH entre Alice et Bob"
+    def test_X3DH_ALICE(self):
+        "Test de le démarrage l'échange de clés X3DH entre Alice et Bob (côté Alice)"
         print()
         request_user_prekey_bundle(self.alice,"bob")
-
-        alice_keys = self.alice.keys
 
         perform_x3dh(self.alice, "bob")
         try:
@@ -159,6 +156,32 @@ class X3DHTests(TestCase):
         #print(session.sk)
 
         print("Test réussi : La session X3DH a bien été créée après perform_x3dh().")
+    
+    def test_X3DH_KEY_EXCHANGE(self):
+        "Test de l'échange de clés X3DH entre Alice et Bob"
+        print()
+        request_user_prekey_bundle(self.alice,"bob")
+
+        ciphertext,hmac=perform_x3dh(self.alice, "bob")
+        session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+
+        session_data = json.dumps({
+            "username": "bob",
+            "from": "alice",
+            "ik": self.alice.keys.ik_public,
+            "epk": session.epk,
+            "cipher": serialize(ciphertext),
+            "hmac": serialize(hmac)
+        })
+
+        data=json.loads(session_data)
+
+        res=receive_x3dh(self.bob,"alice",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
+        #print(res[1].decode('utf-8'))
+
+        print("Test réussi : L'échange de clés X3DH a réussi.")
     
 
     """

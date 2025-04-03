@@ -416,41 +416,7 @@ class SignalUser:
         self.messages[username].append((username, plaintext.decode('utf-8') ))
         return plaintext.decode('utf-8')
 
-    def receive_x3dh(self, username, data):
-        print(data)
-        # {"username": username, "from": self.username, "ik": serialize(ik_bytes), "epk": serialize(epk_pub_bytes), "cipher": ciphertext, "nonce":nonce}
-        ika_bytes = deserialize(data["ik"])
-        epk_bytes = deserialize(data["epk"])
-        cipher = deserialize(data["cipher"])
-        hmac = deserialize(data["hmac"])
-        ika = x25519.X25519PublicKey.from_public_bytes(ika_bytes)
-        epk = x25519.X25519PublicKey.from_public_bytes(epk_bytes)
-        dh1 = self.spk.exchange(ika)
-        dh2 = self.ik.exchange(epk)
-        dh3 = self.spk.exchange(epk)
-
-        info = b"extended_triple_diffie_hellman"
-        hkdf = HKDF(
-            algorithm=hashes.SHA256(),
-            length=32,
-            salt=b"\x00"*32,
-            info=info,
-        )
-        
-        f = b"\xff" * 32
-        km = dh1 + dh2 + dh3
-        SK = hkdf.derive(f + km)
-
-        ad  = serialize(ika_bytes) +  serialize(self.ik.public_key().public_bytes_raw()) 
-        res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))
-        if(res[0]):
-            self.x3dh_session[username] = {"sk" : SK, "spk": self.spk, "ad": ad}
-            self.init_ratchet_reciever(username)
-        else:
-            print("DH Failed")
-            return False
-        
-        return True
+    
     
     
 
@@ -572,10 +538,11 @@ def perform_x3dh(self:User, username:str):
         user_session=user_session,
         sk=serialize(SK),
         spk=user_session.spk,
+        epk=serialize(alice_epk_pub_bytes),
         ad=ad
     )
 
-    return
+    return ciphertext,hmac
     """
         # Envoi de la requête avec le message chiffré vers Django pour qu'il le transmette au destinataire
         url = "localhost:8000/x3dh_message/"
@@ -594,4 +561,48 @@ def perform_x3dh(self:User, username:str):
         else:
             print("X3DH Failed!")
             return False
+    """
+
+def receive_x3dh(self:User, username:str, data):
+    #print(data)
+    alice_ik_bytes = deserialize(data["ik"])
+    epk_bytes = deserialize(data["epk"])
+    cipher = deserialize(data["cipher"])
+    hmac = deserialize(data["hmac"])
+
+    alice_ik = x25519.X25519PublicKey.from_public_bytes(alice_ik_bytes)
+    epk = x25519.X25519PublicKey.from_public_bytes(epk_bytes)
+    bob_spk = x25519.X25519PrivateKey.from_private_bytes(deserialize(self.keys.spk_private))
+    bob_ik = x25519.X25519PrivateKey.from_private_bytes(deserialize(self.keys.ik_private))
+
+    dh1 = bob_spk.exchange(alice_ik)
+    dh2 = bob_ik.exchange(epk)
+    dh3 = bob_spk.exchange(epk)
+
+    info = b"extended_triple_diffie_hellman"
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=b"\x00"*32,
+        info=info,
+    )
+        
+    f = b"\xff" * 32
+    km = dh1 + dh2 + dh3
+    SK = hkdf.derive(f + km)
+
+    bob_ik_public=self.keys.ik_public
+    ad  = serialize(alice_ik_bytes) +  bob_ik_public 
+    res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))
+    return res
+
+    """
+    if(res[0]):
+        self.x3dh_session[username] = {"sk" : SK, "spk": self.spk, "ad": ad}
+        self.init_ratchet_reciever(username)
+    else:
+        print("DH Failed")
+        return False
+        
+    return True"
     """

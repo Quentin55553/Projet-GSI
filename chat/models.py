@@ -70,6 +70,7 @@ class X3DH_Session(models.Model):
     user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
     sk = models.TextField()  # Clé secrète partagée
     spk = models.TextField()  # Clé publique de Bob
+    epk = models.TextField()
     ad = models.TextField()  # Données supplémentaires associées
 
     def __str__(self):
