@@ -13,7 +13,7 @@ from .crypto import *
 from chat.views.view_utils import *
 import json
 
-class UserKeysTests(TestCase):
+class A_UserKeysTests(TestCase):
 
     def setUp(self):
         User.objects.all().delete()
@@ -102,17 +102,10 @@ class UserKeysTests(TestCase):
 
         print("Test réussi : La vérification SPK fonctionne pour un utilisateur.")
 
-
-class RatchetTests(TestCase):
-
-    def setUp(self):
-        User.objects.all().delete()
-        UserKeys.objects.all().delete()
-        call_command('flush', '--no-input')
         
 #------------------------------------------------------------------------------------ Tests relatifs à l'échange X3DH
 
-class X3DHTests(LiveServerTestCase):
+class B_X3DHTests(LiveServerTestCase):
     def setUp(self):
         User.objects.all().delete()
         UserKeys.objects.all().delete()
@@ -185,7 +178,7 @@ class X3DHTests(LiveServerTestCase):
 #------------------------------------------------------------------------------------ Tests relatifs au double ratchet
 
 
-class DoubleRatchetTests(LiveServerTestCase):
+class C_DoubleRatchetTests(LiveServerTestCase):
     def setUp(self):
         User.objects.all().delete()
         UserKeys.objects.all().delete()
@@ -219,11 +212,13 @@ class DoubleRatchetTests(LiveServerTestCase):
         self.assertEqual(alice_ratch.username, "alice")
         self.assertEqual(alice_ratch.peer, "bob")
         self.assertIsNotNone(alice_ratch.session_data)
+        #print(alice_ratch.session_data)
 
         bob_ratch = RatchetSession.objects.get(username="bob", peer="alice")
         self.assertEqual(bob_ratch.username, "bob")
         self.assertEqual(bob_ratch.peer, "alice")
         self.assertIsNotNone(bob_ratch.session_data)
+        #print(bob_ratch.session_data)
 
         print("Test réussi : Les deux sessions de ratchet ont bien été créées.")
 

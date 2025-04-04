@@ -312,14 +312,7 @@ class SignalUser:
         self.messages = {}
         self.get_keys()
 
-    
-    
-    
-
     def get_keys(self, opk_size=10):
-        """
-        
-        """
         self.ik = x25519.X25519PrivateKey.generate()
         self.sik = ed25519.Ed25519PrivateKey.generate()
         self.spk = x25519.X25519PrivateKey.generate()
