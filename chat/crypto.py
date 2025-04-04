@@ -39,12 +39,20 @@ from .models import User
 from .models import UserKeys
 from .models import UserSession
 from .models import X3DH_Session
+from .models import RatchetSession
 import json
 import requests
 import base64
 from django.conf import settings
 
-#----------------------------------------------------------------------------------------------------------- Utilitaires
+
+#######################################################################
+#######################################################################
+######################  FONCTIONS UTILITAIRES #########################
+#######################################################################
+#######################################################################
+
+MAX_SKIP = 10
 
 # Nous faisons tourner l'application en local, nous n'avons pas eu le temps de faire un déploiement concret.
 SERVER_URL = "http://localhost:8000"
@@ -57,17 +65,28 @@ def deserialize(val):
     """Utilisé pour décoder des octets qui ont été encodés en base 64"""
     return base64.standard_b64decode(val.encode('utf-8'))
 
-
-#------------------------------------------------------------------------------------------------------------ Utilitaires - Cryptographie
-
-MAX_SKIP = 10
-
 def GENERATE_DH():
-    """Cette fonction génère aléatoirement une clé privée à partir de la cryptographie des courbes elliptiques (ECC). La courbe utilisée est X25519."""
+    """
+    Cette fonction génère aléatoirement une clé privée à partir de la cryptographie des courbes elliptiques (ECC). La courbe utilisée est X25519.
+    Note : On peut extraire une clé publique de cette clé privée, c'est pour cela qu'on peut aussi dire que cette fonction génère une paire de clés DH.
+    """
     sk = x25519.X25519PrivateKey.generate()
     return sk
 
 def DH(dh_pair, dh_pub):
+    """
+    Cette fonction est utilisée pour calculer l'échange entre la clé privée dh_pair et la clé publique dh_pub (voir schéma de fonctionnement du ratchet).
+    
+    Dans l'algorithme (plus précisément celui du ratchet DH, l'un des deux ratchets), à chaque étape, un parti :
+    - Obtient la clé DH publique de l'émetteur (dh_pub)
+    - Obtient le dh_out qu'a calculé l'émetteur de son côté (étape précédente)
+    - Vérifie que la clé dh_pub associée à la clé DH privée qu'il a à cette étape produit le même dh_out.
+
+    Cela est rendu possible par le fait que les clés DH privées des deux côtés proviennent d'une clé secrète 'SK' sur laquelle les deux partis
+    se sont mis d'accord via X3DH   
+
+    L'opération d'échange ou "association des clés" est réalisée par cette fonction, qui renvoie le résultat.
+    """
     dh_out = dh_pair.exchange(dh_pub)
     return dh_out
 
@@ -78,10 +97,12 @@ def KDF_RK(rk, dh_out):
             encoding=serialization.Encoding.Raw,
             format=serialization.PublicFormat.Raw
         )
+    elif isinstance(rk,str):
+        rk_bytes=deserialize(rk)
     else:
         rk_bytes = rk
 
-    info = b"kdf_rk_info" # should be changed in other places HKDF() is used
+    info = b"kdf_rk_info"
     
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
@@ -235,7 +256,7 @@ def DECRYPT_DOUB_RATCH(mk, cipherout, associated_data):
     ciphertext = cipherout[0]
     mac = cipherout[1]
 
-    info = b"encrypt_info_kdf" # should be changed in other places HKDF() is used
+    info = b"encrypt_info_kdf"
     zero_filled = b"\x00"*80
     
     hkdf = HKDF(
@@ -274,97 +295,7 @@ def DECRYPT_DOUB_RATCH(mk, cipherout, associated_data):
     return plaintext
 
 
-def ENCRYPT_X3DH(SK, plaintext, associated_data):
-    """
-    Cette fonction sert à chiffrer un message en clair (plaintext) à l'aide de la clé SK déterminée par le processus X3DH (voir perform_x3dh()).
-    Elle est utilisée par Alice (initiatrice de la communication entre elle et Bob)
-    L'associated data est présente pour éviter certaines attaques (replay), elle contient les clés d'identité d'Alice et de Bob.
 
-    Une utilisation est faite de la fonction (de hachage) HKDF sur la clé partagée pour obtenir 80 octets qui correspondent à trois valeurs en sortie :
-    - enc_key (32 octets) : Clé de chiffrement utilisée pour chiffrer le plaintext
-    - auth_key (32 octets) : Clé correspondant à la signature numérique (HMAC).
-    Celle-ci est utilisée pour signer la concaténation ciphertext + associated_data. Si le message est modifié par quelqu'un, on le verra grâce à la 
-    vérification de la valeur HMAC.
-    - iv (16 octets) : Cette valeur est une sorte de 'sel' qui permet d'empêcher que deux messages en clair identiques aient le même ciphertext. 
-    Dans cette implémentation, elle est inutile car pas créée aléatoirement (faisant partie de la clé SK) ce qui fait que deux messages identiques vont
-    effectivement être chiffrés de la même façon. C'est un point d'amélioration du code que nous avons identifié.
-
-    En sortie, on retourne le message chiffré et sa signature.
-    """
-    # Utilisation de la HKDF pour obtenir les 3 valeurs
-    zero_filled = b"\x00"*80
-    info = b"X3DH"
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(SK)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    # Chiffrement du plaintext
-    # Note : On ajoute du padding car AES fonctionne par blocs de 16 octets, il faut en mettre si le message en octets n'est pas un multiple de 16 
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-    padder = padding.PKCS7(256).padder()
-    padded_plaintext = padder.update(plaintext) + padder.finalize()
-    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
-
-    # Signature numérique, sur le même principe que l'étape précédente
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(associated_data) + padder.finalize()
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    h.update(padded_assoc_data + ciphertext)
-    h_out = h.finalize()
-    return (ciphertext, h_out)
-
-def DECRYPT_X3DH(SK, ciphertext, mac, associated_data):
-    """
-    Cette fonction est la suite de ENCRYPT_X3DH et sert à déchiffrer le message envoyé et vérifier la signature associée.
-    Pour cela, elle utilise la clé secrète partagée (SK), le texte chiffré, le mac et l'associated data pour la vérification du contexte de l'échange.
-    Mac correspond au h_out de ENCRYPT_X3DH(), la vérification se fait en comparant cette valeur à celle calculée localement.
-    La structure est globalement similaire à celle d'ENCRYPT_X3DH.
-    """
-    # Utilisation de la HKDF pour obtenir les mêmes valeurs que dans ENCRYPT_X3DH()
-    info = b"encrypt_info_kdf"
-    zero_filled = b"\x00"*80
-    info = b"X3DH"
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(SK)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    # Déchiffrement du message chiffré
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    decryptor = cipher.decryptor()
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-    # Calcul de la signature numérique attendue
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(associated_data) + padder.finalize()
-    h.update(padded_assoc_data + ciphertext) 
-    
-    # Vérification de la signature
-    try:
-        h.verify(mac)
-    except:
-        return (False, "")
-
-    unpadder = padding.PKCS7(256).unpadder()
-    plaintext =  unpadder.update(plaintext) + unpadder.finalize()
-    return (True, plaintext)
 
 #------------------------------------------------------------------------------------------------------------ Utilisateur du protocole
 
@@ -381,43 +312,9 @@ class SignalUser:
         self.messages = {}
         self.get_keys()
 
-    def init_ratchet_transmission(self, username):
-        """
-        Fonction d'initialisation du ratchet côté Alice (voir la documentation de Signal : )
-        """
-        self.messages[username] = []
-        SK = self.x3dh_session[username]['sk']
-        self.ratchet_session[username] = {}
-        recipient_dh_pk = self.x3dh_session[username]['spk']
-        self.ratchet_session[username]["DHs"] = GENERATE_DH()
-        self.ratchet_session[username]["DHr"] = recipient_dh_pk
-        self.ratchet_session[username]["RK"], self.ratchet_session[username]["CKs"] = KDF_RK(SK, DH(self.ratchet_session[username]["DHs"], self.ratchet_session[username]["DHr"]))
-        self.ratchet_session[username]["RK"] = x25519.X25519PublicKey.from_public_bytes(self.ratchet_session[username]["RK"])
-        self.ratchet_session[username]["CKs"] = x25519.X25519PublicKey.from_public_bytes(self.ratchet_session[username]["CKs"])
-        self.ratchet_session[username]["CKr"] = None
-        self.ratchet_session[username]["Ns"] = 0
-        self.ratchet_session[username]["Nr"] = 0
-        self.ratchet_session[username]["PN"] = 0
-        self.ratchet_session[username]["MKSKIPPED"] = {}
     
-    def init_ratchet_receiver(self, username):
-        """
-        Fonction d'initialisation du ratchet côté Bob (voir la documentation de Signal : )
-        """
-        self.messages[username] = []
-        SK = self.x3dh_session[username]['sk']
-        recipient_dh_sk = self.x3dh_session[username]['spk']
-        self.ratchet_session[username] = {}
-        self.ratchet_session[username]["DHs"] = recipient_dh_sk
-        self.ratchet_session[username]["DHr"] = None
-        self.ratchet_session[username]["RK"] = SK
-        self.ratchet_session[username]["CKs"] = None
-        self.ratchet_session[username]["CKr"] = None
-        self.ratchet_session[username]["Ns"] = 0
-        self.ratchet_session[username]["Nr"] = 0
-        self.ratchet_session[username]["PN"] = 0
-        self.ratchet_session[username]["MKSKIPPED"] = {}
-        pass
+    
+    
 
     def get_keys(self, opk_size=10):
         """
@@ -468,7 +365,12 @@ class SignalUser:
         self.messages[username].append((username, plaintext.decode('utf-8') ))
         return plaintext.decode('utf-8')
 
-    
+
+################################################################
+################################################################
+########################  ECHANGE X3DH #########################
+################################################################
+################################################################
 
 def request_user_prekey_bundle(self:User, username:str):
     """
@@ -501,8 +403,102 @@ def request_user_prekey_bundle(self:User, username:str):
         ik=serialize(ik.public_bytes_raw()),
         spk=serialize(spk.public_bytes_raw())
     )
+
+def ENCRYPT_X3DH(SK, plaintext, associated_data):
+    """
+    Cette fonction sert à chiffrer un message en clair (plaintext) à l'aide de la clé SK déterminée par le processus X3DH (voir perform_x3dh()).
+    Elle est utilisée par Alice (initiatrice de la communication entre elle et Bob)
+    L'associated data est présente pour éviter certaines attaques (replay), elle contient les clés d'identité d'Alice et de Bob.
+
+    Une utilisation est faite de la fonction (de hachage) HKDF sur la clé partagée pour obtenir 80 octets qui correspondent à trois valeurs en sortie :
+    - enc_key (32 octets) : Clé de chiffrement utilisée pour chiffrer le plaintext
+    - auth_key (32 octets) : Clé correspondant à la signature numérique (HMAC).
+    Celle-ci est utilisée pour signer la concaténation ciphertext + associated_data. Si le message est modifié par quelqu'un, on le verra grâce à la 
+    vérification de la valeur HMAC.
+    - iv (16 octets) : Cette valeur est une sorte de 'sel' qui permet d'empêcher que deux messages en clair identiques aient le même ciphertext. 
+    Dans cette implémentation, elle est inutile car pas créée aléatoirement (faisant partie de la clé SK) ce qui fait que deux messages identiques vont
+    effectivement être chiffrés de la même façon. C'est un point d'amélioration du code que nous avons identifié.
+
+    En sortie, on retourne le message chiffré et sa signature.
+    """
+    # Utilisation de la HKDF pour obtenir les 3 valeurs
+    zero_filled = b"\x00"*80
+    info = b"X3DH"
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=80,
+        salt=zero_filled,
+        info=info,
+    )
+
+    hkdf_out = hkdf.derive(SK)
+    enc_key = hkdf_out[:32]
+    auth_key = hkdf_out[32:64]
+    iv = hkdf_out[64:]
+
+    # Chiffrement du plaintext
+    # Note : On ajoute du padding car AES fonctionne par blocs de 16 octets, il faut en mettre si le message en octets n'est pas un multiple de 16 
+    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+    padder = padding.PKCS7(256).padder()
+    padded_plaintext = padder.update(plaintext) + padder.finalize()
+    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+
+    # Signature numérique, sur le même principe que l'étape précédente
+    padder = padding.PKCS7(256).padder()
+    padded_assoc_data = padder.update(associated_data) + padder.finalize()
+    h = hmac.HMAC(auth_key, hashes.SHA256())
+    h.update(padded_assoc_data + ciphertext)
+    h_out = h.finalize()
+    return (ciphertext, h_out)
+
+
+def DECRYPT_X3DH(SK, ciphertext, mac, associated_data):
+    """
+    Cette fonction est la suite de ENCRYPT_X3DH et sert à déchiffrer le message envoyé et vérifier la signature associée.
+    Pour cela, elle utilise la clé secrète partagée (SK), le texte chiffré, le mac et l'associated data pour la vérification du contexte de l'échange.
+    Mac correspond au h_out de ENCRYPT_X3DH(), la vérification se fait en comparant cette valeur à celle calculée localement.
+    La structure est globalement similaire à celle d'ENCRYPT_X3DH.
+    """
+    # Utilisation de la HKDF pour obtenir les mêmes valeurs que dans ENCRYPT_X3DH()
+    info = b"encrypt_info_kdf"
+    zero_filled = b"\x00"*80
+    info = b"X3DH"
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=80,
+        salt=zero_filled,
+        info=info,
+    )
+
+    hkdf_out = hkdf.derive(SK)
+    enc_key = hkdf_out[:32]
+    auth_key = hkdf_out[32:64]
+    iv = hkdf_out[64:]
+
+    # Déchiffrement du message chiffré
+    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+    # Calcul de la signature numérique attendue
+    h = hmac.HMAC(auth_key, hashes.SHA256())
+    padder = padding.PKCS7(256).padder()
+    padded_assoc_data = padder.update(associated_data) + padder.finalize()
+    h.update(padded_assoc_data + ciphertext) 
+    
+    # Vérification de la signature
+    try:
+        h.verify(mac)
+    except:
+        return (False, "")
+
+    unpadder = padding.PKCS7(256).unpadder()
+    plaintext =  unpadder.update(plaintext) + unpadder.finalize()
+    return (True, plaintext)
    
-def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
+
+def perform_x3dh(self:User, peer:str,server_url=SERVER_URL):
     """
     Exécute l'échange X3DH d'Alice à Bob en envoyant les données au serveur
 
@@ -540,16 +536,16 @@ def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
         
     # Etape 1 : Génération des 3 DHs
     try:
-        user_session = UserSession.objects.get(user=self, peer=username)
+        user_session = UserSession.objects.get(user=self, peer=peer)
     except UserSession.DoesNotExist:
-        raise ValueError(f"Session not found for user {username}!")
+        raise ValueError(f"Session not found for user {peer}!")
     
     alice = User.objects.get(username=self.username)
     alice_ik_bytes=deserialize(alice.keys.ik_private)
     alice_ik = x25519.X25519PrivateKey.from_private_bytes(alice_ik_bytes)
     bob_spk=x25519.X25519PublicKey.from_public_bytes(deserialize(user_session.spk))
     bob_ik=x25519.X25519PublicKey.from_public_bytes(deserialize(user_session.ik))
-    alice_epk = x25519.X25519PrivateKey.generate()
+    alice_epk = GENERATE_DH()
 
     dh1 = alice_ik.exchange(bob_spk)
     dh2 = alice_epk.exchange(bob_ik)
@@ -588,6 +584,8 @@ def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
     # Création de l'objet X3DH_Session
     session=X3DH_Session.objects.create(
         user_session=user_session,
+        alice=self.username,
+        bob=peer,
         sk=serialize(SK),
         spk=user_session.spk,
         epk=serialize(alice_epk_pub_bytes),
@@ -597,7 +595,7 @@ def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
     # Envoi de la requête avec le message chiffré vers le serveur pour qu'il le transmette à Bob
     url = server_url + "/x3dh_message/"
     response = requests.post(url, json={
-        "username": username,
+        "username": peer,
         "from": self.username,
         "ik": self.keys.ik_public,
         "epk": session.epk,
@@ -607,7 +605,7 @@ def perform_x3dh(self:User, username:str,server_url=SERVER_URL):
     
     if response.status_code == 200:
         #print("X3DH Message sent.")
-        #self.init_ratchet_transmission(username)
+        InitRatchetAlice(self,peer)
         return True
     else:
         print("X3DH Failed!")
@@ -656,15 +654,107 @@ def receive_x3dh(self:User, username:str, data):
     bob_ik_public=self.keys.ik_public
     ad  = serialize(alice_ik_bytes) +  bob_ik_public 
     res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))
-    return res
 
-    """
     if(res[0]):
-        self.x3dh_session[username] = {"sk" : SK, "spk": self.spk, "ad": ad}
-        self.init_ratchet_reciever(username)
+        InitRatchetBob(self,username)
     else:
         print("DH Failed")
-        return False
+        return res
         
-    return True"
+    return res
+    
+
+################################################################
+################################################################
+######################  DOUBLE RATCHET #########################
+################################################################
+################################################################
+
+"""
+Pour comprendre les fonctions suivantes, il est encore plus nécessaire qu'avec X3DH de se référer à la documentation technique fournie, surtout pour les schémas.
+Nous décrivons quand même toutes les variables utilisées ainsi que les étapes de chaque fonction. 
+"""
+
+def InitRatchetAlice(self:User, peer:str):
     """
+    Fonction d'initialisation de la session ratchet côté Alice.
+    """
+
+    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+
+    SK = x3dh.sk
+    DHs=GENERATE_DH()
+    DHr = x25519.X25519PublicKey.from_public_bytes(deserialize(x3dh.spk))
+    RK,CKs=KDF_RK(SK, DH(DHs, DHr))
+    RK = x25519.X25519PublicKey.from_public_bytes(RK)
+    CKs = x25519.X25519PublicKey.from_public_bytes(CKs)
+
+    json_fields = {
+        "DHs": serialize(DHs.private_bytes_raw()),  
+        "DHr": serialize(DHr.public_bytes_raw()),        
+        "RK": serialize(RK.public_bytes_raw()),                
+        "CKs": serialize(CKs.public_bytes_raw()),             
+        "CKr": None,             
+        "Ns": 0,                 
+        "Nr": 0,                 
+        "PN": 0,                 
+        "MKSKIPPED": {}          
+    }
+
+    session = RatchetSession(
+        username=self.username,
+        peer=peer,
+        session_data=json.dumps(json_fields)
+    )
+    session.save(
+        #using="local_storage" # à commenter si on veut exécuter les tests
+    )
+
+def InitRatchetBob(self:User, peer:str):
+    """
+    Fonction d'initialisation de la session ratchet côté Bob. Elle fait directement suite au reçu de Bob du message X3DH d'Alice
+    A ce stade, les deux viennent de se mettre d'accord sur une clé secrète partagée SK.
+    Bob va créer un nouvel objet RatchetSession en local pour stocker les informations sur son échange avec Alice.
+
+    Ces informations sont les suivantes :
+
+    - Son propre nom d'utilisateur
+    - Le nom d'utilisateur d'Alice (peer)
+    - DHs : Une paire de clés (valeur privée) DH utilisée pour calculer DH_OUT
+    - DHr : La clé publique utilisée dans le Ratchet DH (associée à la clé privée détenue pour obtenir DH_OUTPUT)
+    - RK : Root Key. C'est SK, la clé secrète partagée qu'Alice et Bob ont déterminée ensemble. 
+    Elle permet notamment de dériver les chain keys (CK) utilisées pour le chiffrement des messages.
+    - CKs : La clé publique utilisée pour chiffrer les messages envoyés
+    - CKr : La clé privée utilisée pour déchiffrer les messages reçus
+    - Ns : Entier qui compte le nombre de message envoyés (sent)
+    - Nr : Entier qui compte le nombre de message reçu (received)
+    - PN : Le nombre de message dans une chaîne de messages précédente
+    - MKSKIPPED : Un dictionnaire de clés à utiliser pour les messages qui n'ont pas été reçus (on peut le détecter quand on reçoit un numéro de message incohérent
+    par rapport au précédent). Nous n'avons pas trop fait attention et géré ce système ici.
+    """
+
+    x3dh = X3DH_Session.objects.get(alice=peer, bob=self.username)
+
+    SK = x3dh.sk
+    recipient_dh_sk =x3dh.spk
+
+    json_fields = {
+        "DHs": recipient_dh_sk,  
+        "DHr": None,        
+        "RK": SK,                
+        "CKs": None,             
+        "CKr": None,             
+        "Ns": 0,                 
+        "Nr": 0,                
+        "PN": 0,                 
+        "MKSKIPPED": {}         
+    }
+
+    session = RatchetSession(
+        username=self.username,
+        peer=peer,
+        session_data=json.dumps(json_fields)
+    )
+    session.save(
+        #using="local_storage" # à commenter si on veut exécuter les tests
+    )

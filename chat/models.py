@@ -97,6 +97,8 @@ class UserSession(models.Model):
     
 class X3DH_Session(models.Model):
     user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
+    alice=models.TextField()
+    bob=models.TextField()
     sk = models.TextField()  # Clé secrète partagée
     spk = models.TextField() 
     epk = models.TextField()
@@ -120,27 +122,9 @@ class X3DH_Message(models.Model):
 
 
 class RatchetSession(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    peer = models.ForeignKey(User, on_delete=models.CASCADE, related_name="peer_sessions")
-    encrypted_data = models.TextField()  # Stocke la session chiffrée
-    nonce = models.BinaryField()  # Stocke le nonce pour AES-GCM
+    username = models.TextField()
+    peer=models.TextField()
+    session_data = models.JSONField()
 
-    def encrypt_data(self, session, key):
-        """ Chiffre l'état du Ratchet avec AES-GCM """
-        aesgcm = AESGCM(key)
-        nonce = os.urandom(12)  # 96-bit nonce
-        encrypted = aesgcm.encrypt(nonce, json.dumps(session).encode(), None)
-        
-        self.encrypted_data = base64.b64encode(encrypted).decode()
-        self.nonce = nonce
-        self.save()
-
-    def decrypt_data(self, key):
-        """ Déchiffre l'état du Ratchet """
-        if not self.encrypted_data:
-            return {}
-
-        aesgcm = AESGCM(key)
-        encrypted = base64.b64decode(self.encrypted_data)
-        decrypted = aesgcm.decrypt(self.nonce, encrypted, None)
-        return json.loads(decrypted.decode())
+    class Meta:
+        db_table = "local_ratchet_session"

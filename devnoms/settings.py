@@ -52,6 +52,9 @@ elif DEVELOPMENT == "open":
 else:
     # Live
     # DEBUG = False
+    # Deux bases de données :
+    # - Une par défaut (serveur)
+    # - La session local d'un utilisateur (utilisée notamment pour les informations d'un Double Ratchet en cours)
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.postgresql",
@@ -62,7 +65,11 @@ else:
             "PORT": "",
             "OPTIONS": {
                 "sslmode": "require",
-            },
+            }
+        },
+        "local_storage":{
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.path.join(BASE_DIR, "local.db"),
         }
     }
     SITE_URL = "https://devnoms.onrender.com"

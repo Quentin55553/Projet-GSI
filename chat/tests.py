@@ -138,7 +138,7 @@ class X3DHTests(LiveServerTestCase):
     
         print("Test réussi : La session a bien été créée et les clés sont présentes.")
 
-    def test_X3DH_ALICE(self):
+    def test_X3DH_INIT_ALICE(self):
         "Test le démarrage de l'échange de clés X3DH entre Alice et Bob (côté Alice)"
         print()
         request_user_prekey_bundle(self.alice,"bob")
@@ -177,34 +177,54 @@ class X3DHTests(LiveServerTestCase):
         res=receive_x3dh(self.bob,"alice",data)
         self.assertTrue(res[0])
         self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
-        print(res[1].decode('utf-8'))
+        #print(res[1].decode('utf-8'))
 
         print("Test réussi : L'échange de clés X3DH complet a réussi.")
 
-    """
-    def test_X3DH_KEY_EXCHANGE_old(self):
-        "Test de l'échange de clés X3DH entre Alice et Bob"
+
+#------------------------------------------------------------------------------------ Tests relatifs au double ratchet
+
+
+class DoubleRatchetTests(LiveServerTestCase):
+    def setUp(self):
+        User.objects.all().delete()
+        UserKeys.objects.all().delete()
+        call_command('flush', '--no-input')
+        # Alice et Bob
+        self.alice = User.objects.create_user(username="alice", password="password")
+        self.bob = User.objects.create_user(username="bob", password="password")
+        # Vérifier que les clés ont bien été générées automatiquement
+        self.assertIsNotNone(self.alice.keys)
+        self.assertIsNotNone(self.bob.keys)
+
+    def test_RATCHET_SESSIONS_INIT(self):
+        "Test de l'initialisation des deux sessions de ratchet chez Alice et chez Bob"
         print()
         request_user_prekey_bundle(self.alice,"bob")
 
-        ciphertext,hmac=perform_x3dh(self.alice, "bob",f"{self.live_server_url}")
-        session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+        if(perform_x3dh(self.alice, "bob",f"{self.live_server_url}")):
+            session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+        else:
+            self.fail("Le X3DH n'a pas fonctionné (Alice)")
 
-        session_data = json.dumps({
-            "username": "bob",
-            "from": "alice",
-            "ik": self.alice.keys.ik_public,
-            "epk": session.epk,
-            "cipher": serialize(ciphertext),
-            "hmac": serialize(hmac)
-        })
-
-        data=json.loads(session_data)
+        data = get_x3dh_message("bob")
+        if data is None:
+            self.fail("Bob n'a pas reçu le message X3DH")
 
         res=receive_x3dh(self.bob,"alice",data)
         self.assertTrue(res[0])
         self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
-        #print(res[1].decode('utf-8'))
 
-        print("Test réussi : L'échange de clés X3DH a réussi.")
-    """
+        alice_ratch = RatchetSession.objects.get(username="alice", peer="bob")
+        self.assertEqual(alice_ratch.username, "alice")
+        self.assertEqual(alice_ratch.peer, "bob")
+        self.assertIsNotNone(alice_ratch.session_data)
+
+        bob_ratch = RatchetSession.objects.get(username="bob", peer="alice")
+        self.assertEqual(bob_ratch.username, "bob")
+        self.assertEqual(bob_ratch.peer, "alice")
+        self.assertIsNotNone(bob_ratch.session_data)
+
+        print("Test réussi : Les deux sessions de ratchet ont bien été créées.")
+
+    
