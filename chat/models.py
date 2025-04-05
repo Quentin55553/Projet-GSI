@@ -94,7 +94,8 @@ class UserSession(models.Model):
 
     def __str__(self):
         return f"Session {self.user.username} -> {self.peer}"
-    
+
+# ---------------------------------------------------------------------------------- X3DH 
 class X3DH_Session(models.Model):
     user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
     alice=models.TextField()
@@ -120,6 +121,7 @@ class X3DH_Message(models.Model):
     cipher = models.TextField()
     hmac = models.TextField()
 
+#---------------------------------------------------------------------------- Double Ratchet
 
 class RatchetSession(models.Model):
     username = models.TextField()
@@ -128,3 +130,26 @@ class RatchetSession(models.Model):
 
     class Meta:
         db_table = "local_ratchet_session"
+
+
+class Ratchet_Message(models.Model):
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE)
+    sender = models.TextField()
+    header=models.TextField()
+    cipher = models.TextField()
+    hmac = models.TextField()
+
+
+class Conversation(models.Model):
+    username = models.TextField() 
+    peer = models.TextField()      
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('username', 'peer')
+
+class Message(models.Model):
+    conversation = models.ForeignKey(Conversation, related_name="messages", on_delete=models.CASCADE)
+    sender = models.TextField()  
+    content = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)

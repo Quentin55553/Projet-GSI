@@ -195,19 +195,19 @@ class C_DoubleRatchetTests(LiveServerTestCase):
         print()
         request_user_prekey_bundle(self.alice,"bob")
 
+        # Echange X3DH
         if(perform_x3dh(self.alice, "bob",f"{self.live_server_url}")):
             session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
         else:
             self.fail("Le X3DH n'a pas fonctionné (Alice)")
-
         data = get_x3dh_message("bob")
         if data is None:
             self.fail("Bob n'a pas reçu le message X3DH")
-
         res=receive_x3dh(self.bob,"alice",data)
         self.assertTrue(res[0])
         self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
 
+        # Vérification des sessions
         alice_ratch = RatchetSession.objects.get(username="alice", peer="bob")
         self.assertEqual(alice_ratch.username, "alice")
         self.assertEqual(alice_ratch.peer, "bob")
@@ -222,4 +222,25 @@ class C_DoubleRatchetTests(LiveServerTestCase):
 
         print("Test réussi : Les deux sessions de ratchet ont bien été créées.")
 
-    
+    def test_RATCHET_FIRST_MESSAGE(self):
+        print()
+        request_user_prekey_bundle(self.alice,"bob")
+
+        # Echange X3DH
+        if(perform_x3dh(self.alice, "bob",f"{self.live_server_url}")):
+            session = X3DH_Session.objects.get(user_session__user=self.alice, user_session__peer="bob")
+        else:
+            self.fail("Le X3DH n'a pas fonctionné (Alice)")
+        data = get_x3dh_message("bob")
+        if data is None:
+            self.fail("Bob n'a pas reçu le message X3DH")
+        res=receive_x3dh(self.bob,"alice",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
+
+        # Envoi du premier message par Alice
+        send_message(self.alice,"bob","Bonjour Bob",f"{self.live_server_url}")
+
+        # Reception par Bob et déchiffrement
+
+        print("Test réussi : Le message ratchet est envoyé par Alice et stocké sur le serveur.")

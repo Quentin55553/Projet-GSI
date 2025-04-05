@@ -4,7 +4,7 @@ from django.urls import path
 from django.conf import settings
 from django.contrib.staticfiles.urls import static
 from chat.views.view_utils import get_user_bundle
-from chat.views.view_utils import x3dh_message
+from chat.views.view_utils import x3dh_message, ratchet_message
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -21,6 +21,7 @@ urlpatterns = [
     path("chat/<str:username>/", chat, name="chat"),
     path('api/user_bundle/<str:username>/', get_user_bundle, name="get_user_bundle"),
     path("x3dh_message/", x3dh_message, name="x3dh_message"),
+    path("ratchet_message/", ratchet_message, name="ratchet_message"),
 ]
 
 

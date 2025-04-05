@@ -40,6 +40,8 @@ from .models import UserKeys
 from .models import UserSession
 from .models import X3DH_Session
 from .models import RatchetSession
+from .models import Conversation
+from .models import Message
 import json
 import requests
 import base64
@@ -145,7 +147,7 @@ class Header:
         self.n = n
     
     def serialize(self):
-        print(self.pn, self.n, "alpha")
+        #print(self.pn, self.n, "alpha")
         return {'dh': serialize(self.dh), 'pn': serialize(self.pn), 'n': serialize(self.n)}
 
     @staticmethod
@@ -154,6 +156,8 @@ class Header:
     
 
 def HEADER(dh_pair, pn, n):
+    if isinstance(dh_pair,str):
+        dh_pair=x25519.X25519PrivateKey.from_private_bytes(deserialize(dh_pair))
     pk = dh_pair.public_key()
     pk_bytes = pk.public_bytes(
         encoding=serialization.Encoding.Raw,
@@ -164,135 +168,7 @@ def HEADER(dh_pair, pn, n):
 def CONCAT(ad, header):
     return (ad, header)
 
-def RatchetEncrypt(state, plaintext, AD):
-    state["CKs"], mk = KDF_CK(state["CKs"])
-    header = HEADER(state["DHs"], state["PN"], state["Ns"])
-    state["Ns"] += 1
-    return header, ENCRYPT_DOUB_RATCH(mk, plaintext, CONCAT(AD, header))
 
-def RatchetDecrypt(state, header, ciphertext, AD):
-    plaintext = TrySkippedMessageKeys(state, header, ciphertext, AD)
-    if plaintext != None:
-        return plaintext
-    if x25519.X25519PublicKey.from_public_bytes(header.dh) != state["DHr"]:                 
-        SkipMessageKeys(state, int.from_bytes(header.pn))
-        DHRatchet(state, header)
-    SkipMessageKeys(state, int.from_bytes(header.n))             
-    state["CKr"], mk = KDF_CK(state["CKr"])
-    state["Nr"] += 1
-    padded_plain_text = DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
-    unpadder = padding.PKCS7(256).unpadder()
-    return unpadder.update(padded_plain_text) + unpadder.finalize()
-
-def TrySkippedMessageKeys(state, header, ciphertext, AD):
-    if (header.dh, int.from_bytes(header.n)) in state["MKSKIPPED"]:
-        mk = state["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
-        del state["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
-        return DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
-    else:
-        return None
-
-def SkipMessageKeys(state, until):
-    if state["Nr"] + MAX_SKIP < until:
-        raise Exception("Too many skipped messages")
-    if state["CKr"] != None:
-        while state["Nr"] < until:
-            state["CKr"], mk = KDF_CK(state["CKr"])
-            DHr_bytes = state["DHr"].public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
-            )
-            state["MKSKIPPED"][DHr_bytes, state["Nr"]] = mk
-            state["Nr"] += 1
-
-def DHRatchet(state, header):
-    state["PN"] = state["Ns"]                          
-    state["Ns"] = 0
-    state["Nr"] = 0
-    state["DHr"] = x25519.X25519PublicKey.from_public_bytes(header.dh)
-    state["RK"], state["CKr"] = KDF_RK(state["RK"], DH(state["DHs"], state["DHr"]))
-    state["DHs"] = GENERATE_DH()
-    state["RK"], state["CKs"] = KDF_RK(state["RK"], DH(state["DHs"], state["DHr"]))
-
-def ENCRYPT_DOUB_RATCH(mk, plaintext, associated_data):
-    info = b"encrypt_info_kdf" # should be changed in other places HKDF() is used
-    zero_filled = b"\x00"*80
-    
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(mk)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-
-    padder = padding.PKCS7(256).padder()
-    padded_plaintext = padder.update(plaintext) + padder.finalize()
-
-    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
-
-    ad, header = associated_data
-    pk, pn, n = header.dh, header.pn, header.n
-    assoc_data = ad + pk + pn + n
-
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
-
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    h.update(padded_assoc_data + ciphertext)
-    h_out = h.finalize()
-    return (ciphertext, h_out)
-
-
-def DECRYPT_DOUB_RATCH(mk, cipherout, associated_data):
-    
-    ciphertext = cipherout[0]
-    mac = cipherout[1]
-
-    info = b"encrypt_info_kdf"
-    zero_filled = b"\x00"*80
-    
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(mk)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    decryptor = cipher.decryptor()
-
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    
-    ad, header = associated_data
-    pk, pn, n = header.dh, header.pn, header.n
-    assoc_data = ad + pk + pn + n
-    
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
-
-    h.update(padded_assoc_data + ciphertext) 
-    
-    try:
-        h.verify(mac)
-    except:
-        raise Exception("MAC verification failed")
-
-    return plaintext
 
 
 
@@ -335,28 +211,7 @@ class SignalUser:
     
 
     
-    def send_message(self, username, msg):
-        ad = self.x3dh_session[username]['ad']
-        header, ciphertext = RatchetEncrypt(self.ratchet_session[username], msg.encode('utf-8'), ad.encode('utf-8'))
-        ciphertext, mac = ciphertext
-        self.messages[username].append((self.username, msg ))
-        #return sio.call("ratchet_msg", {'username': username,'cipher': serialize(ciphertext), 'header': header.serialize(), 'hmac': serialize(mac), 'from': self.username})
-        
-    def is_connected(self, username):
-        if username in self.x3dh_session:
-            return True
-        else:
-            return False
-        
-    def receive_message(self, username, msg):
-        header = Header.deserialize(msg['header'])
-        ciphertext = deserialize(msg['cipher'])
-        hmac = deserialize(msg['hmac'])
-        ad = self.x3dh_session[username]['ad']
-        plaintext = RatchetDecrypt(self.ratchet_session[username], header, (ciphertext, hmac), ad.encode('utf-8'))
-        print("recv:", plaintext)
-        self.messages[username].append((username, plaintext.decode('utf-8') ))
-        return plaintext.decode('utf-8')
+    
 
 
 ################################################################
@@ -751,3 +606,204 @@ def InitRatchetBob(self:User, peer:str):
     session.save(
         #using="local_storage" # à commenter si on veut exécuter les tests
     )
+
+
+
+
+#OK
+def ENCRYPT_DOUB_RATCH(mk, plaintext, associated_data):
+    info = b"encrypt_info_kdf"
+    zero_filled = b"\x00"*80
+    
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=80,
+        salt=zero_filled,
+        info=info,
+    )
+
+    hkdf_out = hkdf.derive(mk)
+    enc_key = hkdf_out[:32]
+    auth_key = hkdf_out[32:64]
+    iv = hkdf_out[64:]
+
+    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
+    encryptor = cipher.encryptor()
+
+    padder = padding.PKCS7(256).padder()
+    padded_plaintext = padder.update(plaintext) + padder.finalize()
+
+    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
+
+    ad, header = associated_data
+    pk, pn, n = header.dh, header.pn, header.n
+    assoc_data = ad + pk + pn + n
+
+    padder = padding.PKCS7(256).padder()
+    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
+
+    h = hmac.HMAC(auth_key, hashes.SHA256())
+    h.update(padded_assoc_data + ciphertext)
+    h_out = h.finalize()
+    return (ciphertext, h_out)
+
+
+# OK
+def DECRYPT_DOUB_RATCH(mk, cipherout, associated_data):
+    
+    ciphertext = cipherout[0]
+    mac = cipherout[1]
+
+    info = b"encrypt_info_kdf"
+    zero_filled = b"\x00"*80
+    
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=80,
+        salt=zero_filled,
+        info=info,
+    )
+
+    hkdf_out = hkdf.derive(mk)
+    enc_key = hkdf_out[:32]
+    auth_key = hkdf_out[32:64]
+    iv = hkdf_out[64:]
+
+    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
+    decryptor = cipher.decryptor()
+
+    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+
+    h = hmac.HMAC(auth_key, hashes.SHA256())
+    
+    ad, header = associated_data
+    pk, pn, n = header.dh, header.pn, header.n
+    assoc_data = ad + pk + pn + n
+    
+    padder = padding.PKCS7(256).padder()
+    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
+
+    h.update(padded_assoc_data + ciphertext) 
+    
+    try:
+        h.verify(mac)
+    except:
+        raise Exception("MAC verification failed")
+
+    return plaintext
+
+
+def RatchetEncrypt(state: RatchetSession, plaintext, AD):
+    data = json.loads(state.session_data) 
+    data["CKs"], mk = KDF_CK(deserialize(data["CKs"]))
+    header = HEADER(data["DHs"], data["PN"], data["Ns"])
+    data["Ns"] += 1
+    data["CKs"]=serialize(data["CKs"])
+    state.session_data = json.dumps(data)
+    state.save(
+        #using="local_storage" # à commenter si on veut exécuter les tests
+    )
+    return header, ENCRYPT_DOUB_RATCH(mk, plaintext, CONCAT(AD, header))
+
+def RatchetDecrypt(state, header, ciphertext, AD):
+    plaintext = TrySkippedMessageKeys(state, header, ciphertext, AD)
+    if plaintext != None:
+        return plaintext
+    if x25519.X25519PublicKey.from_public_bytes(header.dh) != state["DHr"]:                 
+        SkipMessageKeys(state, int.from_bytes(header.pn))
+        DHRatchet(state, header)
+    SkipMessageKeys(state, int.from_bytes(header.n))             
+    state["CKr"], mk = KDF_CK(state["CKr"])
+    state["Nr"] += 1
+    padded_plain_text = DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
+    unpadder = padding.PKCS7(256).unpadder()
+    return unpadder.update(padded_plain_text) + unpadder.finalize()
+
+def TrySkippedMessageKeys(state, header, ciphertext, AD):
+    if (header.dh, int.from_bytes(header.n)) in state["MKSKIPPED"]:
+        mk = state["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
+        del state["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
+        return DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
+    else:
+        return None
+
+def SkipMessageKeys(state, until):
+    if state["Nr"] + MAX_SKIP < until:
+        raise Exception("Too many skipped messages")
+    if state["CKr"] != None:
+        while state["Nr"] < until:
+            state["CKr"], mk = KDF_CK(state["CKr"])
+            DHr_bytes = state["DHr"].public_bytes(
+                encoding=serialization.Encoding.Raw,
+                format=serialization.PublicFormat.Raw
+            )
+            state["MKSKIPPED"][DHr_bytes, state["Nr"]] = mk
+            state["Nr"] += 1
+
+def DHRatchet(state, header):
+    state["PN"] = state["Ns"]                          
+    state["Ns"] = 0
+    state["Nr"] = 0
+    state["DHr"] = x25519.X25519PublicKey.from_public_bytes(header.dh)
+    state["RK"], state["CKr"] = KDF_RK(state["RK"], DH(state["DHs"], state["DHr"]))
+    state["DHs"] = GENERATE_DH()
+    state["RK"], state["CKs"] = KDF_RK(state["RK"], DH(state["DHs"], state["DHr"]))
+
+
+def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
+    # Session X3DH
+    try:
+        x3hd = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    except X3DH_Session.DoesNotExist:
+        x3hd = X3DH_Session.objects.get(alice=peer, bob=self.username)
+
+    ad=x3hd.ad
+
+    # Session ratchet
+    self_ratch = RatchetSession.objects.get(username=self.username, peer=peer)
+
+    header, ciphertext = RatchetEncrypt(self_ratch, msg.encode('utf-8'), ad.encode('utf-8'))
+    ciphertext, mac = ciphertext
+    
+    # Récupère ou crée la conversation
+    conversation, _ = Conversation.objects.get_or_create(username=self.username, peer=peer)
+
+    # Crée le message
+    Message.objects.create(conversation=conversation, sender=self.username, content=msg)
+
+    # Envoi de la requête avec le message chiffré vers le serveur pour qu'il le transmette
+    try:
+        url = server_url + "/ratchet_message/"
+        response = requests.post(url, json={
+            "username": peer,
+            "from": self.username,
+            "cipher": serialize(ciphertext),
+            "hmac": serialize(mac),
+            "header":header.serialize(),
+        })
+        #print("Response status:", response.status_code)
+        #print("Response text:", response.text)
+    except requests.exceptions.RequestException as e:
+        print("Erreur lors de la requête:", e)
+    
+    if response.status_code == 200:
+        #print("Ratchet message sent.")
+        return True
+    else:
+        print("Ratchet message failed")
+        return False
+    
+    #return sio.call("ratchet_msg", {'username': username,'cipher': serialize(ciphertext), 'header': header.serialize(), 'hmac': serialize(mac), 'from': self.username})
+
+
+def receive_message(self, username, msg):
+    header = Header.deserialize(msg['header'])
+    ciphertext = deserialize(msg['cipher'])
+    hmac = deserialize(msg['hmac'])
+    ad = self.x3dh_session[username]['ad']
+    plaintext = RatchetDecrypt(self.ratchet_session[username], header, (ciphertext, hmac), ad.encode('utf-8'))
+    print("recv:", plaintext)
+    self.messages[username].append((username, plaintext.decode('utf-8') ))
+    return plaintext.decode('utf-8')
+
+       
