@@ -241,6 +241,13 @@ class C_DoubleRatchetTests(LiveServerTestCase):
         # Envoi du premier message par Alice
         send_message(self.alice,"bob","Bonjour Bob",f"{self.live_server_url}")
 
-        # Reception par Bob et déchiffrement
+        # Reception par Bob 
+        data = get_ratchet_message("bob")
+        if data is None:
+            self.fail("Bob n'a pas reçu le message ratchet")
 
-        print("Test réussi : Le message ratchet est envoyé par Alice et stocké sur le serveur.")
+        # Dechiffrement
+        plaintext=receive_message(self.bob,"alice",data)
+        self.assertEqual(plaintext,"Bonjour Bob")
+
+        print("Test réussi : Le message ratchet est envoyé par Alice et stocké sur le serveur, reçu par bob et déchiffré par Bob")

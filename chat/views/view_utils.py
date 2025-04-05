@@ -127,8 +127,7 @@ def get_ratchet_message(username: str):
         return {
             "username": username,
             "from": msg.sender,
-            "ik": msg.ik,
-            "epk": msg.epk,
+            "header": msg.header,
             "cipher": msg.cipher,
             "hmac": msg.hmac
         }
