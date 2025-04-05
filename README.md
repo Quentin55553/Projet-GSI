@@ -42,13 +42,19 @@
    python manage.py migrate
    ```
 
-5. **Lancer le serveur**
+5. **Définir la variable d'environnement**
+
+   ```bash
+   export DJANGO_SETTINGS_MODULE=devnoms.settings
+   ```
+
+6. **Lancer le serveur**
 
    ```bash
    daphne devnoms.asgi:application
    ```
 
-6. Aller à l'adresse : `http://localhost:8000/`.
+7. Aller à l'adresse : `http://localhost:8000/`.
 
 ---
 
@@ -67,4 +73,3 @@ Here’s a preview of the **Devnoms Chat App**:
 
 **Profile Management**  
 ![Edit Profile](https://filesstatic.netlify.app/Chatapp/img/edit.png)
-
