@@ -19,20 +19,9 @@ Ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls
 ## 🖥️ **Accès au projet**
 
 
-1. **Télécharger le dépôt**
+1. **Se placer à la racine du projet (là où est ce readme)**
 
-   ```bash
-   git clone https://github.com/Quentin55553/Projet-GSI.git
-   cd Projet-GSI
-   ```
-
-2. **Changer de branche**
-
-   ```bash
-   git checkout Protocole
-   ```
-
-3. **Installer les dépendances**
+2. **Installer les dépendances**
 
    ```bash
    python -m venv venv
@@ -40,22 +29,22 @@ Ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls
    pip install -r requirements.txt
    ```
 
-4. **Initialiser la BDD**
+3. **Initialiser la BDD**
 
    ```bash
    python manage.py makemigrations  
    python manage.py migrate
    ```
 
-5. **Définir la variable d'environnement**
+4. **Définir la variable d'environnement**
 
    ```bash
    export DJANGO_SETTINGS_MODULE=devnoms.settings
    ```
 
-6. **Effectuer les tests**
+5. **Effectuer les tests**
 
-	```bash
+   ```bash
    python manage.py test
    ```
 
