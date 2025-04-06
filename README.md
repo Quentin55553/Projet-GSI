@@ -1,6 +1,6 @@
 ## 📋 **Description**
 
-Cette branche constitue l'un des deux rendus.  
+Ce dossier constitue l'un des deux rendus.  
 
 Il contient des tests de fonctions qui simulent une partie du Signal Protocol. Le code que nous avons produit est entièrement commenté, voici les fichiers principaux à regarder :  
 
