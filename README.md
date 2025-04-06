@@ -17,28 +17,33 @@ Ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls
 
 1. **Se placer à la racine du projet (là où est ce readme)**
 
-2. **Installer les dépendances**
+2. **Créer et activer l'environnement virtuel**
 
    ```bash
    python -m venv venv
    source venv/bin/activate
+   ```
+
+3. **Installer les dépendances**
+
+   ```bash
    pip install -r requirements.txt
    ```
 
-3. **Initialiser la BDD**
+4. **Initialiser la base de données**
 
    ```bash
    python manage.py makemigrations  
    python manage.py migrate
    ```
 
-4. **Définir la variable d'environnement**
+5. **Définir la variable d'environnement**
 
    ```bash
    export DJANGO_SETTINGS_MODULE=devnoms.settings
    ```
 
-5. **Effectuer les tests**
+6. **Effectuer les tests**
 
    ```bash
    python manage.py test
