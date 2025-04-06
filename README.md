@@ -29,16 +29,15 @@ Celle-ci n'intègre pas encore les protocoles, situés sur l'autre branche de ce
 > [!NOTE]
 > Le bon fonctionnement de l'interface n'est pas garanti avec une version de Django supérieure ou égale à 5.0.
 
-3. **Initialiser la base de données**
+4. **Initialiser la base de données**
 
     ```bash
     python manage.py makemigrations  
     python manage.py migrate
     ```
 
-4. **Lancer le serveur**
+5. **Lancer le serveur**
 
     ```bash
     python manage.py runserver
     ```
-
