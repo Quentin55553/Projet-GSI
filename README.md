@@ -23,6 +23,7 @@ Celle-ci n'intègre pas encore les protocoles, situés sur l'autre branche de ce
 3. **Installer Django**
 > [!NOTE]
 > Le bon fonctionnement de l'interface n'est pas garantit avec une version de Django supérieure ou égale à 5.0.
+
     ```bash
     pip install Django==4.2
     ```
