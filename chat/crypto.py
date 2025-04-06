@@ -19,12 +19,16 @@ Elle présente notamment le pseudo-code de certaines fonctions à utiliser et ex
 https://github.com/rohankalbag/cryptography-signal-protocol
 
 Nous avons repris ce code, c'est pour cela qu'on peut trouver des similarités sur certaines fonctions du nôtre. 
-
-En revanche, l'adapter à l'architecture Django a nécessité beaucoup de travail d'analyse, n'était pas trivial et a rendu obligatoire de comprendre en détail
+En revanche, l'adapter à l'architecture Django a nécessité un certain travail d'analyse, n'était pas trivial et a rendu obligatoire de comprendre en détail
 le fonctionnement du code, que nous avons d'ailleurs commenté avec soin (le code présent sur ce dépôt est très peu commenté). 
 
 Nous espérons que cette façon de procéder ne nous sera pas trop reprochée, il aurait été mieux pour nous de tout construire de zéro depuis la documentation
 de Signal, mais le manque de temps et la charge de travail de ce deuxième semestre nous ont poussé à prendre cette décision. 
+
+
+NB : ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls comptent les tests dans ce dossier, ils servent de "preuve de concept" pour
+l'implémentation d'une communication sécurisée. Nous avions au départ prévu de reprendre l'application en l'améliorant, 
+mais nous avons finalement créé notre propre interface disponible dans l'autre dossier du rendu.
 """
 
 

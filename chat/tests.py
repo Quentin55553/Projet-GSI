@@ -21,6 +21,7 @@ class A_UserKeysTests(TestCase):
         call_command('flush', '--no-input')
 
     def test_CREATION_USERS(self):
+        "Test de création d'utilisateurs"
         print()
         # Création d'Alice
         alice = User.objects.create_user(username='alice', password='password')

@@ -12,7 +12,7 @@ import json
 #-------------------------------------------------------------------------------------------------- Server functions
 
 def get_user_bundle(request, username):
-    """Retourne le bundle de clés d'un utilisateur"""
+    """Retourne le bundle de clés d'un utilisateur (voir request_)"""
     user_keys = get_object_or_404(UserKeys, user__username=username)
     return JsonResponse({
         "username": username,
@@ -29,6 +29,7 @@ def get_user_bundle(request, username):
 
 @csrf_exempt
 def x3dh_message(request):
+    """Cette fonction stocke un message X3DH sur le serveur (voir perform_x3dh() dans crypto.py)"""
     if request.method == "POST":
         try:
             data = json.loads(request.body)
@@ -84,6 +85,7 @@ def get_x3dh_message(username: str):
 
 @csrf_exempt
 def message(request):
+    """Cette fonction stocke un message sur le serveur (voir send_message() dans crypto.py)"""
     if request.method == "POST":
         try:
             data = json.loads(request.body)
