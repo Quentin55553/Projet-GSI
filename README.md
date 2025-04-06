@@ -41,3 +41,7 @@ Celle-ci n'intègre pas encore les protocoles, situés sur l'autre branche de ce
     ```bash
     python manage.py runserver
     ```
+
+6. **Accéder à l'interface**
+
+    Ouvrez votre navigateter à l'adresse : [http://localhost:8000](http://localhost:8000)
