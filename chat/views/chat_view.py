@@ -50,27 +50,3 @@ def chat(request, username):
 
     # If the method is not GET, you might want to handle it here (e.g., return an error or a response)
     return JsonResponse({"error": "Invalid request method"}, status=405)
-
-
-# @login_required(login_url="login")
-# @csrf_exempt
-# def message_list(request, sender=None, receiver=None):
-#     if request.method == "GET":
-#         messages = Messages.objects.filter(
-#             sender_name=sender, receiver_name=receiver, seen=False
-#         )
-#         serializer = MessageSerializer(
-#             messages, many=True, context={"request": request}
-#         )
-#         for message in messages:
-#             message.seen = True
-#             message.save()
-#         return JsonResponse(serializer.data, safe=False)
-
-#     elif request.method == "POST":
-#         data = JSONParser().parse(request)
-#         serializer = MessageSerializer(data=data)
-#         if serializer.is_valid():
-#             serializer.save()
-#             return JsonResponse(serializer.data, status=201)
-#         return JsonResponse(serializer.errors, status=400)

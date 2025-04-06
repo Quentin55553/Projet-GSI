@@ -121,24 +121,6 @@ class X3DH_Message(models.Model):
     cipher = models.TextField()
     hmac = models.TextField()
 
-#---------------------------------------------------------------------------- Double Ratchet
-
-class RatchetSession(models.Model):
-    username = models.TextField()
-    peer=models.TextField()
-    session_data = models.JSONField()
-
-    class Meta:
-        db_table = "local_ratchet_session"
-
-
-class Ratchet_Message(models.Model):
-    receiver = models.ForeignKey(User, on_delete=models.CASCADE)
-    sender = models.TextField()
-    header=models.TextField()
-    cipher = models.TextField()
-    hmac = models.TextField()
-
 
 class Conversation(models.Model):
     username = models.TextField() 

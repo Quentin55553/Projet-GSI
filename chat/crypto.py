@@ -39,7 +39,6 @@ from .models import User
 from .models import UserKeys
 from .models import UserSession
 from .models import X3DH_Session
-from .models import RatchetSession
 from .models import Conversation
 from .models import Message
 import json
@@ -75,28 +74,6 @@ def GENERATE_DH():
     sk = x25519.X25519PrivateKey.generate()
     return sk
 
-def DH(dh_pair, dh_pub):
-    """
-    Cette fonction est utilisée pour calculer l'échange entre la clé privée dh_pair et la clé publique dh_pub (voir schéma de fonctionnement du ratchet).
-    
-    Dans l'algorithme (plus précisément celui du ratchet DH, l'un des deux ratchets), à chaque étape, un parti :
-    - Obtient la clé DH publique de l'émetteur (dh_pub)
-    - Obtient le dh_out qu'a calculé l'émetteur de son côté (étape précédente)
-    - Vérifie que la clé dh_pub associée à la clé DH privée qu'il a à cette étape produit le même dh_out.
-
-    Cela est rendu possible par le fait que les clés DH privées des deux côtés proviennent d'une clé secrète 'SK' sur laquelle les deux partis
-    se sont mis d'accord via X3DH   
-
-    L'opération d'échange ou "association des clés" est réalisée par cette fonction, qui renvoie le résultat.
-    """
-    if isinstance(dh_pair,str):
-        dh_pair=x25519.X25519PrivateKey.from_private_bytes(deserialize(dh_pair))
-    if isinstance(dh_pub,str):
-        dh_pub=x25519.X25519PublicKey.from_public_bytes(deserialize(dh_pub))
-
-    dh_out = dh_pair.exchange(dh_pub)
-    return dh_out
-
 def KDF_RK(rk, dh_out):
     # rk is hkdf salt, dh_out is hkdf input key material
     if isinstance(rk, x25519.X25519PublicKey):
@@ -124,7 +101,7 @@ def KDF_RK(rk, dh_out):
 
     return (root_key, chain_key)
 
-
+"""
 def KDF_CK(ck):
 
     if isinstance(ck, x25519.X25519PublicKey):
@@ -146,79 +123,7 @@ def KDF_CK(ck):
     next_ck = h.finalize()
 
     return (next_ck, message_key)
-
-class Header:
-    def __init__(self, dh, pn, n):
-        self.dh = dh
-        self.pn = pn
-        self.n = n
-    
-    def serialize(self):
-        return json.dumps({
-            'dh': serialize(self.dh),
-            'pn': serialize(self.pn),
-            'n': serialize(self.n)
-        })
-
-    @staticmethod
-    def deserialize(val):
-        if isinstance(val,str):
-            val=json.loads(val)
-        return Header(deserialize(val['dh']), deserialize(val['pn']), deserialize(val['n']))
-    
-
-def HEADER(dh_pair, pn, n):
-    if isinstance(dh_pair,str):
-        dh_pair=x25519.X25519PrivateKey.from_private_bytes(deserialize(dh_pair))
-    pk = dh_pair.public_key()
-    pk_bytes = pk.public_bytes(
-        encoding=serialization.Encoding.Raw,
-        format=serialization.PublicFormat.Raw
-    )
-    return Header(pk_bytes, pn.to_bytes(pn.bit_length()), n.to_bytes(n.bit_length()))
-
-def CONCAT(ad, header):
-    return (ad, header)
-
-#------------------------------------------------------------------------------------------------------------ Utilisateur du protocole
-
-class SignalUser:
-    def __init__(self, username):
-        """
-        Cette fonction est utilisée pour initialiser un objet utilisateur. Il peut déjà avoir un compte, dans ce cas les clés arriveront du serveur,
-        sinon elles seront générées sur le moment.
-        """
-        self.username = username
-        self.sessions = {}
-        self.x3dh_session = {}
-        self.ratchet_session = {}
-        self.messages = {}
-        self.get_keys()
-
-    def get_keys(self, opk_size=10):
-        self.ik = x25519.X25519PrivateKey.generate()
-        self.sik = ed25519.Ed25519PrivateKey.generate()
-        self.spk = x25519.X25519PrivateKey.generate()
-        spk_bytes = self.spk.public_key().public_bytes_raw()
-        self.spk_sig = self.sik.sign(spk_bytes)
-
-    def serialize_user(self):
-        
-        ik_bytes = self.ik.public_key().public_bytes_raw()
-        sik_bytes = self.sik.public_key().public_bytes_raw()
-        spk_bytes = self.spk.public_key().public_bytes_raw()
-        
-        return {
-            "username": self.username, 
-            "ik": serialize(ik_bytes),
-            "sik": serialize(sik_bytes),
-            "spk": serialize(spk_bytes),
-            "spk_sig": serialize(self.spk_sig)
-        }
-    
-
-    
-    
+"""    
 
 
 ################################################################
@@ -460,7 +365,7 @@ def perform_x3dh(self:User, peer:str,server_url=SERVER_URL):
     
     if response.status_code == 200:
         #print("X3DH Message sent.")
-        InitRatchetAlice(self,peer)
+        #InitRatchetAlice(self,peer)
         return True
     else:
         print("X3DH Failed!")
@@ -511,366 +416,42 @@ def receive_x3dh(self:User, username:str, data):
     res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))
 
     if(res[0]):
-        InitRatchetBob(self,username)
+        #InitRatchetBob(self,username)
+        pass
     else:
         print("DH Failed")
         return res
         
     return res
     
-
-################################################################
-################################################################
-######################  DOUBLE RATCHET #########################
-################################################################
-################################################################
-
-"""
-Pour comprendre les fonctions suivantes, il est encore plus nécessaire qu'avec X3DH de se référer à la documentation technique fournie, surtout pour les schémas.
-Nous décrivons quand même toutes les variables utilisées ainsi que les étapes de chaque fonction. 
-"""
-
-def InitRatchetAlice(self:User, peer:str):
-    """
-    Fonction d'initialisation de la session ratchet côté Alice.
-    """
-
-    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
-
-    SK = x3dh.sk
-    DHs=GENERATE_DH()
-    DHr = x25519.X25519PublicKey.from_public_bytes(deserialize(x3dh.spk))
-    RK,CKs=KDF_RK(SK, DH(DHs, DHr))
-    RK = x25519.X25519PublicKey.from_public_bytes(RK)
-    CKs = x25519.X25519PublicKey.from_public_bytes(CKs)
-
-    json_fields = {
-        "DHs": serialize(DHs.private_bytes_raw()),  
-        "DHr": serialize(DHr.public_bytes_raw()),        
-        "RK": serialize(RK.public_bytes_raw()),                
-        "CKs": serialize(CKs.public_bytes_raw()),             
-        "CKr": None,             
-        "Ns": 0,                 
-        "Nr": 0,                 
-        "PN": 0,                 
-        "MKSKIPPED": {}          
-    }
-
-    session = RatchetSession(
-        username=self.username,
-        peer=peer,
-        session_data=json.dumps(json_fields)
-    )
-    session.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-
-def InitRatchetBob(self:User, peer:str):
-    """
-    Fonction d'initialisation de la session ratchet côté Bob. Elle fait directement suite au reçu de Bob du message X3DH d'Alice
-    A ce stade, les deux viennent de se mettre d'accord sur une clé secrète partagée SK.
-    Bob va créer un nouvel objet RatchetSession en local pour stocker les informations sur son échange avec Alice.
-
-    Ces informations sont les suivantes :
-
-    - Son propre nom d'utilisateur
-    - Le nom d'utilisateur d'Alice (peer)
-    - DHs : Une paire de clés (valeur privée) DH utilisée pour calculer DH_OUT
-    - DHr : La clé publique utilisée dans le Ratchet DH (associée à la clé privée détenue pour obtenir DH_OUTPUT)
-    - RK : Root Key. C'est SK, la clé secrète partagée qu'Alice et Bob ont déterminée ensemble. 
-    Elle permet notamment de dériver les chain keys (CK) utilisées pour le chiffrement des messages.
-    - CKs : La clé publique utilisée pour chiffrer les messages envoyés
-    - CKr : La clé privée utilisée pour déchiffrer les messages reçus
-    - Ns : Entier qui compte le nombre de message envoyés (sent)
-    - Nr : Entier qui compte le nombre de message reçu (received)
-    - PN : Le nombre de message dans une chaîne de messages précédente
-    - MKSKIPPED : Un dictionnaire de clés à utiliser pour les messages qui n'ont pas été reçus (on peut le détecter quand on reçoit un numéro de message incohérent
-    par rapport au précédent). Nous n'avons pas trop fait attention et géré ce système ici.
-    """
-
-    x3dh = X3DH_Session.objects.get(alice=peer, bob=self.username)
-
-    SK = x3dh.sk
-    recipient_dh_sk =x3dh.spk
-
-    json_fields = {
-        "DHs": recipient_dh_sk,  
-        "DHr": None,        
-        "RK": SK,                
-        "CKs": None,             
-        "CKr": None,             
-        "Ns": 0,                 
-        "Nr": 0,                
-        "PN": 0,                 
-        "MKSKIPPED": {}         
-    }
-
-    session = RatchetSession(
-        username=self.username,
-        peer=peer,
-        session_data=json.dumps(json_fields)
-    )
-    session.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-
-
-
-
-#OK
-def ENCRYPT_DOUB_RATCH(mk, plaintext, associated_data):
-    info = b"encrypt_info_kdf"
-    zero_filled = b"\x00"*80
-    
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(mk)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    encryptor = cipher.encryptor()
-
-    padder = padding.PKCS7(256).padder()
-    padded_plaintext = padder.update(plaintext) + padder.finalize()
-
-    ciphertext = encryptor.update(padded_plaintext) + encryptor.finalize()
-
-    ad, header = associated_data
-    pk, pn, n = header.dh, header.pn, header.n
-    assoc_data = ad + pk + pn + n
-
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
-
-    print("AuthKey1:",serialize(auth_key))
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    h.update(padded_assoc_data + ciphertext)
-    h_out = h.finalize()
-    print("FIN DE ENCRYPT_DOUB_RATCH")
-    print("ciphertext:", serialize(ciphertext))
-    print("hmac:", serialize(h_out))
-    return (ciphertext, h_out)
-
-
-# OK
-def DECRYPT_DOUB_RATCH(mk, cipherout, associated_data):
-    
-    ciphertext = cipherout[0]
-    mac = cipherout[1]
-
-    print("DEBUT DE DECRYPT_DOUB_RATCH")
-    print("ciphertext:", serialize(ciphertext))
-    print("hmac:", serialize(mac))
-
-    info = b"encrypt_info_kdf"
-    zero_filled = b"\x00"*80
-    
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=80,
-        salt=zero_filled,
-        info=info,
-    )
-
-    hkdf_out = hkdf.derive(mk)
-    enc_key = hkdf_out[:32]
-    auth_key = hkdf_out[32:64]
-    iv = hkdf_out[64:]
-
-    cipher = Cipher(algorithms.AES256(enc_key), modes.CBC(iv))
-    decryptor = cipher.decryptor()
-
-    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-    print("AuthKey2:",serialize(auth_key))
-    h = hmac.HMAC(auth_key, hashes.SHA256())
-    
-    ad, header = associated_data
-    pk, pn, n = header.dh, header.pn, header.n
-    assoc_data = ad + pk + pn + n
-    
-    padder = padding.PKCS7(256).padder()
-    padded_assoc_data = padder.update(assoc_data) + padder.finalize()
-
-    h.update(padded_assoc_data + ciphertext) 
-    
-    try:
-        h.verify(mac)
-    except:
-        raise Exception("MAC verification failed")
-
-    return plaintext
-
-
-def RatchetEncrypt(state: RatchetSession, plaintext, AD):
-    data = json.loads(state.session_data) 
-    data["CKs"], mk = KDF_CK(deserialize(data["CKs"]))
-    header = HEADER(data["DHs"], data["PN"], data["Ns"])
-    data["Ns"] += 1
-    data["CKs"]=serialize(data["CKs"])
-    state.session_data = json.dumps(data)
-    state.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-    return header, ENCRYPT_DOUB_RATCH(mk, plaintext, CONCAT(AD, header))
-
-def RatchetDecrypt(state:RatchetSession, header, ciphertext, AD):
-    plaintext = TrySkippedMessageKeys(state, header, ciphertext, AD)
-    data = json.loads(state.session_data) 
-    if plaintext != None:
-        return plaintext
-    DHr=data["DHr"]
-    state.session_data = json.dumps(data)
-    state.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-    if DHr:
-        DHr=x25519.X25519PublicKey.from_public_bytes(deserialize(data["DHr"]))
-    if x25519.X25519PublicKey.from_public_bytes(header.dh) != DHr:             
-        SkipMessageKeys(state, int.from_bytes(header.pn))
-        DHRatchet(state, header)
-        data = json.loads(state.session_data) 
-    SkipMessageKeys(state, int.from_bytes(header.n))             
-    data["CKr"], mk = KDF_CK(data["CKr"])
-    data["Nr"] += 1
-    padded_plain_text = DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
-    unpadder = padding.PKCS7(256).unpadder()
-    state.session_data = json.dumps(data)
-    state.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-    return unpadder.update(padded_plain_text) + unpadder.finalize()
-
-def TrySkippedMessageKeys(state:RatchetSession, header, ciphertext, AD):
-    data = json.loads(state.session_data) 
-    if (header.dh, int.from_bytes(header.n)) in data["MKSKIPPED"]:
-        mk = data["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
-        del data["MKSKIPPED"][header.dh, int.from_bytes(header.n)]
-        state.session_data = json.dumps(data)
-        state.save(
-            #using="local_storage" # à commenter si on veut exécuter les tests
-        )
-        return DECRYPT_DOUB_RATCH(mk, ciphertext, CONCAT(AD, header))
-    else:
-        return None
-
-def SkipMessageKeys(state:RatchetSession, until):
-    data = json.loads(state.session_data) 
-    if data["Nr"] + MAX_SKIP < until:
-        raise Exception("Too many skipped messages")
-    if data["CKr"] != None:
-        while data["Nr"] < until:
-            data["CKr"], mk = KDF_CK(data["CKr"])
-            DHr_bytes = data["DHr"].public_bytes(
-                encoding=serialization.Encoding.Raw,
-                format=serialization.PublicFormat.Raw
-            )
-            data["MKSKIPPED"][DHr_bytes, data["Nr"]] = mk
-            data["Nr"] += 1
-    state.session_data = json.dumps(data)
-    state.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-
-def DHRatchet(state:RatchetSession, header):
-    data = json.loads(state.session_data) 
-    data["PN"] = data["Ns"]                          
-    data["Ns"] = 0
-    data["Nr"] = 0
-    data["DHr"] = x25519.X25519PublicKey.from_public_bytes(header.dh)
-    data["RK"], data["CKr"] = KDF_RK(data["RK"], DH(data["DHs"], data["DHr"]))
-    data["DHs"] = GENERATE_DH()
-    data["RK"], data["CKs"] = KDF_RK(data["RK"], DH(data["DHs"], data["DHr"]))
-
-    data["DHr"]=serialize(data["DHr"].public_bytes_raw())
-    data["DHs"]=serialize(data["DHs"].private_bytes_raw())
-    data["RK"]=serialize(data["RK"])
-    data["CKs"]=serialize(data["CKs"])
-    data["CKr"]=serialize(data["CKr"])
-    state.session_data = json.dumps(data)
-    state.save(
-        #using="local_storage" # à commenter si on veut exécuter les tests
-    )
-
+#------------------------------------------------------------------------------ Envoi de messages
 
 def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
-    # Session X3DH
-    try:
-        x3hd = X3DH_Session.objects.get(alice=self.username, bob=peer)
-    except X3DH_Session.DoesNotExist:
-        x3hd = X3DH_Session.objects.get(alice=peer, bob=self.username)
+    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    ad=x3dh.ad
+    SK=x3dh.sk
+    ciphertext, hmac = ENCRYPT_X3DH(SK, msg.encode('utf-8'), ad.encode('utf-8'))
 
-    ad=x3hd.ad
-
-    # Session ratchet
-    self_ratch = RatchetSession.objects.get(username=self.username, peer=peer)
-
-    header, ciphertext = RatchetEncrypt(self_ratch, msg.encode('utf-8'), ad.encode('utf-8'))
-    ciphertext, mac = ciphertext
-    
-    # Récupère ou crée la conversation
-    conversation, _ = Conversation.objects.get_or_create(username=self.username, peer=peer)
-
-    # Crée le message
-    Message.objects.create(conversation=conversation, sender=self.username, content=msg)
-
-    # Envoi de la requête avec le message chiffré vers le serveur pour qu'il le transmette
-    try:
-        url = server_url + "/ratchet_message/"
-        response = requests.post(url, json={
-            "username": peer,
-            "from": self.username,
-            "cipher": serialize(ciphertext),
-            "hmac": serialize(mac),
-            "header":header.serialize(),
-        })
-        #print("Response status:", response.status_code)
-        #print("Response text:", response.text)
-    except requests.exceptions.RequestException as e:
-        print("Erreur lors de la requête:", e)
-    
+    # Envoi de la requête avec le message chiffré vers le serveur pour qu'il le transmette à Bob
+    url = server_url + "/message/"
+    response = requests.post(url, json={
+        "username": peer,
+        "from": self.username,
+        "cipher":serialize(ciphertext),
+        "hmac": serialize(hmac)
+    })
     if response.status_code == 200:
-        #print("Ratchet message sent.")
         return True
     else:
-        print("Ratchet message failed")
         return False
-    
-    #return sio.call("ratchet_msg", {'username': username,'cipher': serialize(ciphertext), 'header': header.serialize(), 'hmac': serialize(mac), 'from': self.username})
 
-
-def receive_message(self:User, peer:str, msg):
-    # Session X3DH
-    try:
-        x3hd = X3DH_Session.objects.get(alice=self.username, bob=peer)
-    except X3DH_Session.DoesNotExist:
-        x3hd = X3DH_Session.objects.get(alice=peer, bob=self.username)
-    ad=x3hd.ad
-
-    header = Header.deserialize(msg['header'])
-    ciphertext = deserialize(msg['cipher'])
-    hmac = deserialize(msg['hmac'])
-
-    # Session ratchet
-    self_ratch = RatchetSession.objects.get(username=self.username, peer=peer)
-
-    plaintext = RatchetDecrypt(self_ratch, header, (ciphertext, hmac), ad.encode('utf-8'))
-    print("recv:", plaintext)
-    print("decode:", plaintext.decode('utf-8'))
-
-    # Récupère ou crée la conversation
-    conversation, _ = Conversation.objects.get_or_create(username=self.username, peer=peer)
-
-    # Crée le message
-    Message.objects.create(conversation=conversation, sender=self.username, content=msg)
-
-    return plaintext.decode('utf-8')
+def receive_message(self:User, peer:str, data):
+    cipher = deserialize(data["cipher"])
+    hmac = deserialize(data["hmac"])
+    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    ad=x3dh.ad
+    SK=x3dh.sk
+    res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))        
+    return res
 
        
