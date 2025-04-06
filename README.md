@@ -1,7 +1,3 @@
-
-
-
-
 ## 🛠️ **Technology Stack**
 
 - **Backend**: Django (Python)
@@ -60,16 +56,16 @@
 
 ## 📷 **Screenshots**
 
-Here’s a preview of the **Devnoms Chat App**:
+Voici un aperçu de l'application **Devnoms Chat** :
 
-**Login Page**  
+**Page de connexion**  
 ![Login](https://filesstatic.netlify.app/Chatapp/img/login.png)
 
-**Signup Page**  
+**Page d'inscription**  
 ![Signup](https://filesstatic.netlify.app/Chatapp/img/signup.png)
 
-**Chat Interface**  
+**Interface de discussion**  
 ![Chat Interface](https://filesstatic.netlify.app/Chatapp/img/chat.png)
 
-**Profile Management**  
+**Gestion du profil**  
 ![Edit Profile](https://filesstatic.netlify.app/Chatapp/img/edit.png)
