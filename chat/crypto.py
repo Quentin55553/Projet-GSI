@@ -85,7 +85,13 @@ def GENERATE_DH():
 def request_user_prekey_bundle(self:User, username:str):
     """
     Cette fonction est utilisée pour obtenir les clés publiques d'un utilisateur (username). 
-    Ces clés publiques sont utilisées par le protocole X3DH au moment d'un premier contact entre deux utilisateurs. 
+    Ces clés publiques sont utilisées par le protocole X3DH au moment d'un premier contact entre deux utilisateurs.
+    Les clés du bundle sont :
+    - IK : Clé publique d'identité de l'utilisateur
+    - SIK : Clé publique de signature de l'utilisateur (signing identity key)
+    Celle-ci a été utilisée pour signer SPK.
+    - SPK : Clé publique signée de l'utilisateur (signed pre key).
+    Cette fonction vérifie que la signature de SPK faite avec SIK est correcte avant de transmettre le bundle.
     """
     user = User.objects.get(username=username)
     if(not user):
@@ -95,12 +101,15 @@ def request_user_prekey_bundle(self:User, username:str):
     sik_bytes = deserialize(data["sik_public"])
     spk_bytes = deserialize(data["spk_public"])
     spk_sig_bytes = deserialize(data["spk_signature"])
-        
+    
+    # Note : On peut observer ici la différence entre ik/spk et sik au niveau des fonctions utilisées 
+    # SIK est une clé de signature, c'est pour ça qu'elle n'utilise pas la même fonction que les deux autres
     ik = x25519.X25519PublicKey.from_public_bytes(ik_bytes)
     sik = ed25519.Ed25519PublicKey.from_public_bytes(sik_bytes)
     spk = x25519.X25519PublicKey.from_public_bytes(spk_bytes)
 
     # Vérification de la cohérence de la signature de la clé SPK du destinataire
+    # SIK (privée) a signé SPK (publique) chez le destinataire et la clé SIK (publique) permet de vérifier la signature 
     try:
         sik.verify(spk_sig_bytes, spk_bytes)
     except:
