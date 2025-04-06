@@ -74,57 +74,6 @@ def GENERATE_DH():
     sk = x25519.X25519PrivateKey.generate()
     return sk
 
-def KDF_RK(rk, dh_out):
-    # rk is hkdf salt, dh_out is hkdf input key material
-    if isinstance(rk, x25519.X25519PublicKey):
-        rk_bytes = rk.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-    elif isinstance(rk,str):
-        rk_bytes=deserialize(rk)
-    else:
-        rk_bytes = rk
-
-    info = b"kdf_rk_info"
-    
-    hkdf = HKDF(
-        algorithm=hashes.SHA256(),
-        length=64,
-        salt=rk_bytes,
-        info=info,
-    )
-    
-    h_out = hkdf.derive(dh_out)
-    root_key = h_out[:32]
-    chain_key = h_out[32:]
-
-    return (root_key, chain_key)
-
-"""
-def KDF_CK(ck):
-
-    if isinstance(ck, x25519.X25519PublicKey):
-        ck_bytes = ck.public_bytes(
-            encoding=serialization.Encoding.Raw,
-            format=serialization.PublicFormat.Raw
-        )
-    elif isinstance(ck,str):
-        ck_bytes=deserialize(ck)
-    else:
-        ck_bytes = ck
-
-    h = hmac.HMAC(ck_bytes, hashes.SHA256())
-    h.update(bytearray([0x01]))
-    message_key = h.finalize()
-
-    h = hmac.HMAC(ck_bytes, hashes.SHA256())
-    h.update(bytearray([0x02]))
-    next_ck = h.finalize()
-
-    return (next_ck, message_key)
-"""    
-
 
 ################################################################
 ################################################################
@@ -427,9 +376,13 @@ def receive_x3dh(self:User, username:str, data):
 #------------------------------------------------------------------------------ Envoi de messages
 
 def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
-    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    try:
+        x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    except X3DH_Session.DoesNotExist:
+        x3dh = X3DH_Session.objects.get(alice=peer, bob=self.username)
+
     ad=x3dh.ad
-    SK=x3dh.sk
+    SK=deserialize(x3dh.sk)
     ciphertext, hmac = ENCRYPT_X3DH(SK, msg.encode('utf-8'), ad.encode('utf-8'))
 
     # Envoi de la requête avec le message chiffré vers le serveur pour qu'il le transmette à Bob
@@ -448,9 +401,12 @@ def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
 def receive_message(self:User, peer:str, data):
     cipher = deserialize(data["cipher"])
     hmac = deserialize(data["hmac"])
-    x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    try:
+        x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
+    except X3DH_Session.DoesNotExist:
+        x3dh = X3DH_Session.objects.get(alice=peer, bob=self.username)
     ad=x3dh.ad
-    SK=x3dh.sk
+    SK=deserialize(x3dh.sk)
     res = DECRYPT_X3DH(SK, cipher, hmac, ad.encode('utf-8'))        
     return res
 

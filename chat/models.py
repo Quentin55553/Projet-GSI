@@ -100,10 +100,10 @@ class X3DH_Session(models.Model):
     user_session = models.OneToOneField(UserSession, on_delete=models.CASCADE)
     alice=models.TextField()
     bob=models.TextField()
-    sk = models.TextField()  # Clé secrète partagée
+    sk = models.TextField() 
     spk = models.TextField() 
     epk = models.TextField()
-    ad = models.TextField()  # Données supplémentaires associées
+    ad = models.TextField()
 
     def __str__(self):
         return f"X3DH Session {self.user_session.user.username} -> {self.user_session.peer}"
@@ -131,7 +131,12 @@ class Conversation(models.Model):
         unique_together = ('username', 'peer')
 
 class Message(models.Model):
-    conversation = models.ForeignKey(Conversation, related_name="messages", on_delete=models.CASCADE)
-    sender = models.TextField()  
-    content = models.TextField()
-    timestamp = models.DateTimeField(auto_now_add=True)
+    """
+    Ce modèle représente le message qu'envoie Alice à Bob lors du protocole X3DH. (voir crypto.py)
+    Il contient les informations sur le destinataire et l'émetteur, la clé éphémère générée par l'émetteur et sa clé (publique) d'identité.
+    Il contient aussi le message chiffré et sa signature numérique.
+    """
+    receiver = models.ForeignKey(User, on_delete=models.CASCADE)
+    sender = models.TextField()
+    cipher = models.TextField()
+    hmac = models.TextField()

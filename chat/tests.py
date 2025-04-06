@@ -174,3 +174,30 @@ class B_X3DHTests(LiveServerTestCase):
 
         print("Test réussi : L'échange de clés X3DH complet a réussi.")
 
+    def test_MESSAGE_EXCHANGE(self):
+        "Test de l'envoi et de la réception d'un message après avoir effectué l'échange X3DH"
+        print()
+
+        # X3DH
+        request_user_prekey_bundle(self.alice,"bob")
+        perform_x3dh(self.alice, "bob",f"{self.live_server_url}")
+        data = get_x3dh_message("bob")
+        res=receive_x3dh(self.bob,"alice",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"##CHAT_START##")
+
+        # Message d'Alice à Bob
+        send_message(self.alice,"bob","Bonjour Bob",f"{self.live_server_url}")
+        data=get_message("bob")
+        res=receive_message(self.bob,"alice",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"Bonjour Bob")
+
+        # Message de Bob à Alice
+        send_message(self.bob,"alice","Bonjour Alice",f"{self.live_server_url}")
+        data=get_message("alice")
+        res=receive_message(self.alice,"bob",data)
+        self.assertTrue(res[0])
+        self.assertEqual(res[1].decode('utf-8'),"Bonjour Alice")
+
+        print("Test réussi : Un message chiffré peut être échangé entre Alice et Bob après X3DH.")
