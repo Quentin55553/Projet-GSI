@@ -1,6 +1,6 @@
 ## 📋 **Description**
 
-Cette branche constitue l'un des deux rendus.  
+Ce dossier constitue l'un des deux rendus.  
 
 Il contient la base visuelle de l'interface de l'application.
 
