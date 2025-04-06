@@ -1,13 +1,22 @@
-## 🛠️ **Technology Stack**
 
-- **Backend**: Django (Python)
-- **Frontend**: HTML, CSS, JavaScript
-- **Database**: PostgreSQL
-- **Real-Time Communication**: WebSockets (for real-time communication)
+
+
+
+## 🛠️ **Description**
+
+Cette branche constitue l'un des deux rendus.  
+
+Il contient des tests de fonctions qui simulent une partie du Signal Protocol. Le code que nous avons produit est entièrement commenté, voici les fichiers principaux à regarder :  
+
+- chat/crypto.py  
+- chat/models.py  
+- chat/tests.py  
+
+Ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls comptent les tests dans ce dossier, ils servent de "preuve de concept" pour l'implémentation d'une communication sécurisée. Nous avions au départ prévu de reprendre l'application en l'améliorant, mais nous avons finalement créé notre propre interface disponible sur l'autre branche de ce dépôt.  
 
 ---
 
-## 🖥️ **Travailler sur le projet**
+## 🖥️ **Accès au projet**
 
 
 1. **Télécharger le dépôt**
@@ -20,7 +29,7 @@
 2. **Changer de branche**
 
    ```bash
-   git checkout Implémentation
+   git checkout Protocole
    ```
 
 3. **Installer les dépendances**
@@ -44,28 +53,9 @@
    export DJANGO_SETTINGS_MODULE=devnoms.settings
    ```
 
-6. **Lancer le serveur**
+6. **Effectuer les tests**
 
-   ```bash
-   daphne devnoms.asgi:application
+	```bash
+   python manage.py test
    ```
 
-7. Aller à l'adresse : `http://localhost:8000/`.
-
----
-
-## 📷 **Screenshots**
-
-Voici un aperçu de l'application **Devnoms Chat** :
-
-**Page de connexion**  
-![Login](https://filesstatic.netlify.app/Chatapp/img/login.png)
-
-**Page d'inscription**  
-![Signup](https://filesstatic.netlify.app/Chatapp/img/signup.png)
-
-**Interface de discussion**  
-![Chat Interface](https://filesstatic.netlify.app/Chatapp/img/chat.png)
-
-**Gestion du profil**  
-![Edit Profile](https://filesstatic.netlify.app/Chatapp/img/edit.png)
