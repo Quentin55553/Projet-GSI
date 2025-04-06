@@ -1,8 +1,14 @@
 """
-Ce fichier de code peut-être considéré comme le coeur de notre projet (models.py est aussi assez important car il décrit les objets présents en BDD).
-Il regroupe toutes les fonctions cryptographiques utilisées pour garantir la sécurité des messages échangés et implémente le Signal Protocol.
+Ce fichier de code regroupe toutes les fonctions cryptographiques utilisées pour garantir la sécurité des messages échangés 
+et implémente une partie du Signal Protocol.
 
-Afin de produire le code suivant, nous nous sommes aidés des deux sources suivantes :
+Cette implémentation reste très théorique et n'a qu'un rôle de simulation, elle ne peut pas être utilisée en l'état avec notre interface graphique
+pour différentes raisons structurelles.
+
+Les tests présents dans tests.py, exécutables avec 'python manage.py test', nous ont permis de vérifier que le code fonctionne. Ils simulent le protocole X3DH
+entre deux utilisateurs ainsi que l'envoi d'un message chiffré, son déchiffrement par le destinataire.
+
+Afin de produire le code, nous nous sommes aidés des deux sources suivantes :
 
 1. La documentation de Signal
 https://signal.org/docs/
@@ -14,10 +20,8 @@ https://github.com/rohankalbag/cryptography-signal-protocol
 
 Nous avons repris ce code, c'est pour cela qu'on peut trouver des similarités sur certaines fonctions du nôtre. 
 
-En revanche, adapter le code à l'architecture Django a nécessité beaucoup de travail d'analyse, n'était pas trivial et a rendu obligatoire de comprendre en détail
-le fonctionnement du code, que nous avons d'ailleurs commenté entièrement avec soin (le code présent sur ce dépôt est très peu commenté). Aucun de nous n'avait 
-travaillé avec Django avant ce projet, ce qui a compliqué les choses et nous a demandé d'apprendre sur le tas, mais nous avons quand même décidé de nous en tenir
-à ce que notre état de l'art des technologies nous avait appris (Django est l'un des meilleurs frameworks pour la sécurité générale d'une application). 
+En revanche, l'adapter à l'architecture Django a nécessité beaucoup de travail d'analyse, n'était pas trivial et a rendu obligatoire de comprendre en détail
+le fonctionnement du code, que nous avons d'ailleurs commenté avec soin (le code présent sur ce dépôt est très peu commenté). 
 
 Nous espérons que cette façon de procéder ne nous sera pas trop reprochée, il aurait été mieux pour nous de tout construire de zéro depuis la documentation
 de Signal, mais le manque de temps et la charge de travail de ce deuxième semestre nous ont poussé à prendre cette décision. 
@@ -36,11 +40,8 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import serialization
 from .models import User
-from .models import UserKeys
 from .models import UserSession
 from .models import X3DH_Session
-from .models import Conversation
-from .models import Message
 import json
 import requests
 import base64
@@ -84,7 +85,7 @@ def GENERATE_DH():
 def request_user_prekey_bundle(self:User, username:str):
     """
     Cette fonction est utilisée pour obtenir les clés publiques d'un utilisateur (username). 
-    Ces clés publiques sont notamment utilisées par le protocole X3DH au moment d'un premier contact entre deux utilisateurs. 
+    Ces clés publiques sont utilisées par le protocole X3DH au moment d'un premier contact entre deux utilisateurs. 
     """
     user = User.objects.get(username=username)
     if(not user):
@@ -117,7 +118,7 @@ def ENCRYPT_X3DH(SK, plaintext, associated_data):
     """
     Cette fonction sert à chiffrer un message en clair (plaintext) à l'aide de la clé SK déterminée par le processus X3DH (voir perform_x3dh()).
     Elle est utilisée par Alice (initiatrice de la communication entre elle et Bob)
-    L'associated data est présente pour éviter certaines attaques (replay), elle contient les clés d'identité d'Alice et de Bob.
+    L'associated data ad est présente pour éviter certaines attaques (replay), c'est une variable contenant les clés d'identité d'Alice et de Bob.
 
     Une utilisation est faite de la fonction (de hachage) HKDF sur la clé partagée pour obtenir 80 octets qui correspondent à trois valeurs en sortie :
     - enc_key (32 octets) : Clé de chiffrement utilisée pour chiffrer le plaintext
@@ -373,9 +374,19 @@ def receive_x3dh(self:User, username:str, data):
         
     return res
     
-#------------------------------------------------------------------------------ Envoi de messages
+################################################################
+################################################################
+########################  MESSAGES #############################
+################################################################
+################################################################
 
 def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
+    """
+    Cette fonction permet à un utilisateur d'envoyer un message chiffré à un autre. Elle utilise la session X3DH 
+    Sa structure est très similaire à celle de perform_x3dh(), les calculs de clés en moins car cette fois, la clé secrète SK a déjà été calculée et est
+    disponible dans un objet X3DH_Session qui serait stocké en local en pratique.
+    """
+    # Session X3DH qui contient la clé secrète
     try:
         x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
     except X3DH_Session.DoesNotExist:
@@ -399,8 +410,13 @@ def send_message(self:User, peer:str, msg:str,server_url=SERVER_URL):
         return False
 
 def receive_message(self:User, peer:str, data):
+    """
+    Cette fonction permet à un destinataire de recevoir un message chiffré qu'il peut déchiffrer après avoir effectué X3DH avec l'émetteur
+    De la même manière que la fonction précédentes, son fonctionnement se base beaucoup sur receive_x3dh()
+    """
     cipher = deserialize(data["cipher"])
     hmac = deserialize(data["hmac"])
+    # Session X3DH qui contient la clé secrète
     try:
         x3dh = X3DH_Session.objects.get(alice=self.username, bob=peer)
     except X3DH_Session.DoesNotExist:

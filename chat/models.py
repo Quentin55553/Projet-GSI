@@ -9,9 +9,6 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-import os
-import json
-import base64
 from django.http import JsonResponse
 
 #--------------------------------------------------------------------------------------------------------- Models
@@ -120,15 +117,6 @@ class X3DH_Message(models.Model):
     epk = models.TextField()
     cipher = models.TextField()
     hmac = models.TextField()
-
-
-class Conversation(models.Model):
-    username = models.TextField() 
-    peer = models.TextField()      
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('username', 'peer')
 
 class Message(models.Model):
     """
