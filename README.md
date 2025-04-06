@@ -1,7 +1,3 @@
-
-
-
-
 ## 📋 **Description**
 
 Cette branche constitue l'un des deux rendus.  
@@ -47,4 +43,4 @@ Ne pas faire attention à l'application sous-jacente sur ce projet Django, seuls
    ```bash
    python manage.py test
    ```
-
+   
